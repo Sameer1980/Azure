@@ -1,0 +1,1 @@
+[].forEach.call(document.querySelectorAll('link[rel="stylesheet"][media="print"]'),n=>{n.onload=()=>n.media="all",n.href=n.dataset.href});
