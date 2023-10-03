@@ -1,0 +1,9 @@
+Subscription Free Trial
+Resource group ADF-1
+Name ADF-1a
+Region Central India
+Version V2
+Networking 
+Connect via Public endpoint
+Tags
+ADF Dataorchestration (Data factory (V2))

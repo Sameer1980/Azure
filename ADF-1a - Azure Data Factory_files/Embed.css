@@ -1,0 +1,158 @@
+﻿
+#MfpEmbed_Iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    max-width: 100%;
+}
+
+#MfpEmbed_Popup_Iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+#MfpEmbed_Button_Iframe {
+    width: 100%;
+    border: none;
+    max-width: 100%;
+    max-height: 100vh;
+}
+
+#mfpembed_overlayDiv {
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1000000;
+    background-color: black;
+    opacity: 0.6;
+    align-items: center;
+    justify-content: center;
+}
+
+#MfpEmbed_CrossButton {
+    width: 14px;
+    height: 14px;
+    font-style: normal;
+    margin-left: 2px;
+    margin-top: -8px;
+    padding-top: 11px;
+    padding-left: 1px;
+}
+
+#MfpEmbed_Popup {
+    z-index: 1000001;
+    opacity: 1;
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    margin: auto;
+    border-radius: 2px;
+    background-color: white;
+    box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.20);
+}
+
+#MfpEmbed_Button {
+    border-radius: 2px;
+    background-color: #008272;
+    border: none;
+    display: flex;
+    color: white;
+    font-style: normal;
+    font-family: Segoe UI;
+    font-size: 16px;
+    outline: none;
+    padding-right: 15px;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+}
+
+#MfpEmbed_Button_Container {
+    z-index: 1000001;
+    opacity: 1;
+    float: right;
+    border-radius: 2px;
+    background-color: white;
+    box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.20);
+    bottom: 0px;
+    right: 0px;
+    position: fixed;
+    margin-right: 48px;
+    margin-bottom: 48px;
+    border: none;
+    transition-property: height;
+    transition-timing-function: ease;
+    transition-duration: 1s;
+}
+#MfpEmbed_Button_Container_Collapse {
+    z-index: 1000001;
+    opacity: 1;
+    float: right;
+    border-radius: 2px;
+    background-color: white;
+    box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.20);
+    bottom: 0px;
+    right: 0px;
+    position: fixed;
+    margin-right: 48px;
+    margin-bottom: 48px;
+    border: none;
+    transition-property: height;
+    transition-timing-function: ease;
+    transition-duration: 1s;
+}
+
+#MfpEmbed_Title_text {
+    padding-left: 24px;
+    padding-bottom: 8px;
+    padding-top: 13px;
+    font-size: 16px;
+    font-family: Segoe UI;
+    color: #333333;
+    line-height: 21px;
+    height: 21px;
+}
+
+#MfpEmbed_Icon_Arrow {
+    width: 14px;
+    height: 14px;
+}
+
+#MfpEmbed_Span {
+    margin: 10px;
+}
+
+#mfpembed_iconDiv {
+    width: 21px;
+    height: 21px;
+    border: 1px solid;
+    right: 0px;
+    top: 0px;
+    position: absolute;
+    margin-right: -22px;
+    margin-top: -22px;
+    font-style: normal;
+    border-radius: 50%;
+    border-color: white;
+}
+
+#MfpEmbed_InlineWithCancel {
+    position: relative;
+}
+
+#MfpEmbed_InlineWithCancel #mfpembed_iconDiv {
+    margin-right: 0px;
+    margin-top: 0px;
+    cursor: pointer;
+}
+
+@media only screen and (width < 1280px) {
+    #MfpEmbed_Popup {
+        margin-top: 25px;
+    }
+}

@@ -1,0 +1,167 @@
+ADF conversion of dataset from CSV to JSON.
+------------------------------------------------------------------------------------------------------------------	
+1) Create a Resource Group.eg: ADF-1
+2) Create an instance of ADF.eg: ADF-1a.Create a new Pipeline "Pipeline1"  and define a activity like "Copy file" and then Publish to save. 
+3) Create a storage account . eg: store1980
+4) Inside the storage account create containers . Eg: "raw" and "container1980".
+5)Upload the data set inside the container. Eg: 'customersalesdata.csv'
+6) Create a Linked Service to ADLS. Eg: 'AzureDataLakeStorage1'
+7) Create a dataset inside Pipeline . Eg: 'dataset_src_cust_data'.
+8) Inside the dataset set the Filepath - 'container1980 / Directory / 	CustomerSalesDataSet.csv'
+9)Create a folder 'customersales' inside the raw container.
+10) Create another dataset 'json_target' inside Pipeline - 'AzureDataLakeStorage1'. The file format should be JSON.  
+11)Inside the dataset set the Filepath- 'raw/customersales'. 
+11) Go to Pipeline , click choose activity 'Copy data' . In the below Source tab select 'Source dataset' select dataset 'dataset_src_cust_data'.(Uncheck 'Recursively' checkbox option)
+12) In the Sink tab set 'Sink Dataset' as dataset 'json_target'.
+13) Click 'Debug' to run the Pipeline. It triggers test runs of the current pipelines without publishing changes to the Service.
+
+Imp notes :
+-----------
+Options for inconsistent source files.
+
+a) Go to 'Copy data' activity . Under 'Settings' tab -->  'Fault Tolerance' - 'Skip incompatible rows'. 
+b) Check 'Enable logging' option checkbox. 
+
+For loading multiple files into one source .(Copy 5 files with a parameter to the destination with the same name)  
+--------------------------------------------------------------------------------------------------------------------
+
+a) In the 'container1980' inside storage account 'store1980' add a directory 'Fileset' and upload a set of five files 'customersalesdataset_01','..._02',
+'..._03' , etc.
+
+b) Create a new Pipeline 'pl_copy_wuth_param' and set the 'Get Metadata' activity.
+(Optional)Inside the activity under 'General' tab you can give the 'Retry' field value as 3 as well as 'Retry Interval(sec)' 30 so that in case of any failure it will try 3 times with a interval of 30 sec. each.
+
+c) Under the 'Settings' tab create a new dataset 'ds_src_param' .(choose options as "Azure Data Lake Storage Gen2" , "format as CSV").
+d) From the 'root' select the 'File path' as 'container1980'-> 'Fileset' -> dataset 'ds_src_param' .
+e) Under the 'Settings' tab create a New 'Field list' and under 'Arguement' give the option as 'Child items'(dropdown).
+d) Run 'Debug' option for activity 'GetMetadata1'.
+e) Add 'ForEach' activity to the dashboard.Under 'Settings' check the 'Sequential' checkbox else data from multiple files will start flowing in parallel.
+f) In the 'Items' add dynamic content (@activity('Get Metadata1').output.childItems) add this.
+g)Add the 'Wait' activity under the 'ForEach' activity.
+h) Run the 'Debug'.
+i) 'ForEach' loop copies the 5 files sequentially .
+j) Again create a new dataset 'ds_param_src_for5files' .Choose options as "Azure Data Lake Storage Gen2" , "format as CSV".
+k) Add a 'Copy Data' activity to the pipeline and provide the 'File path type' as 'Wildcard file path' . (container1980/ Fileset/ @item().name)
+l) Delete the  'Wait' activity . Delete the .json file created earlier inside 'customersales' directory under container 'Raw'.
+m) For 'Sink' create a new dataset 'ds_tgt_csv_cust' (choose options as "Azure Data Lake Storage Gen2" , "format as CSV", raw/customersales/)
+o) Run the 'Debug'. After Pipeline execution check inside 'customersales' directory.
+p) Publish to save the pipeline work.
+
+
+
+Create SQL database.
+Database name- AdventureWorks 
+Server name - az-demo-1
+Server admin login - adm-demo
+password - Secret_23
+
+Configure the SQL database with 'Computer tier' - 'Serverless' and MaxvCores as 1.
+'Networking' tab - 'Connectivity method' - 'Public endpoint'
+'Additional Settings' - 'Use existing data' - 'Sample' . AdventureWorksLT will be created as the sample database.
+Region for SQL access should be North Europe.
+Go to the networking tab and click on the 'Allow Azure services and resources to access this server'.
+Give the 'Rule name' - 'all-access' ,  
+'Start IPv4 address' - 0.0.0.0 
+'End IPv4 address' - 255.255.255.255
+Under the services log into the database Query editor(preview).Log in with your credentials.
+
+Working the ADF with database.
+-------------------------------------------------------------------------------------------------------------------------------------
+Under any existing or new Pipeline add activities 'Lookup' and 'Script'  . 
+Multiple query support in 'Script'activity . Not in 'Lookup'.
+Read/ Modify operation supported in 'Script'. Only Read supported in 'Lookup'. 
+
+Query - select table_schema,table_name from information_schema.tables where table_type='BASE TABLE' and table_name in ('Customer','CustomerAddress','Address')	
+
+Create a new linked service --> AzureSQLDatabase1. Give the server name (az-demo-1), databasename('AdventureWorks') and authentication type -- SQL Authentication. Give user name and password and click 'Create'. We can also use 'Azure Key Vault'.
+
+For the 'Lookup' activity under 'Settings' create a new 'Source dataset'. Give the name as 'db_sql_meta'.
+
+For the 'Lookup' activity there are three options for 'Use Query' - 'Table', 'Query' , 'Stored Procedure'. Use 'Query' and put the query in the textbox.
+(select table_schema,table_name from information_schema.tables where table_type='BASE TABLE' and table_name in ('Customer','CustomerAddress','Address')
+Preview the data . We will get only one row. To select multiple rows uncheck the 'First row only' checkbox.
+Run 'Debug'.
+Add a 'ForEach' activity .
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------
+If we want to deploy anything on Azure it should be in ARM template. It is like .exe file.
+There are two Integration Runtimes (IR) -- Self-help Integration Runtime(configure gateway,firewall, server yourself) and Azure Integration Runtime.
+Binary format does copy and paste(ctrl+c + ctrl+v) the file whereas other formats opens , reads , copies and dump to detination.
+
+Copy data from blob to sql table.
+------------------------------------
+
+Create a source blob.
+1) Launch Notepad. Copy the following text and save it in a file named inputEmp.txt on your disk:
+
+text
+
+Copy
+FirstName|LastName
+John|Doe
+Jane|Doe
+
+2) Create a container named adfv2tutorial and upload the inputEmp.txt file to the container. 
+3)Create a sink SQL table
+  Use the following SQL script to create a table named dbo.emp in your SQL Database:
+CREATE TABLE dbo.emp
+(
+    ID int IDENTITY(1,1) NOT NULL,
+    FirstName varchar(50),
+    LastName varchar(50)
+)
+GO
+CREATE CLUSTERED INDEX IX_emp_ID ON dbo.emp (ID);
+
+4)Allow Azure services to access SQL Server. Verify that the setting 'Allow Azure services and resources to access this server' is enabled for your server that's running SQL Database. This setting lets Data Factory write data to your database instance. To verify and turn on this setting, go to logical SQL server > Security > Firewalls and virtual networks > set the Allow Azure services and resources to access this server option to ON.
+
+5) On the New data factory page, under Name, enter 'samirTutorialDataFactory'.
+
+6) Use the Copy Data tool to create a pipeline. On the home page of Azure Data Factory, select the 'Ingest' tile to launch the Copy Data tool.
+7)On the 'Properties' page of the Copy Data tool, choose 'Built-in copy task' under 'Task type', then select Next.
+8) On the Source data store page, complete the following steps:
+
+       a. Select + Create 'new connection' to add a connection.
+        b. Select 'Azure Blob Storage' from the gallery, and then select 'Continue'.
+        c. On the 'New connection (Azure Blob Storage)' page, select your Azure subscription from the Azure subscription list, and select your storage    account from the Storage account name list. 'Test connection' and then select 'Create'.
+ d. Select the newly created linked service as source in the Connection block.
+e.In the 'File or folder' section, select Browse to navigate to the 'adfv2tutorial' folder, select the 'inputEmp.txt' file, then select OK.
+f.Select Next to move to next step.
+
+9) On the 'File format settings' page, enable the checkbox for First row as header. Notice that the tool automatically detects the column and row delimiters, and you can preview data and view the schema of the input data by selecting Preview data button on this page. Then select 'Next'.
+
+10) On the Destination data store page, completes the following steps:
+
+a. Select + Create new connection to add a connection.
+
+b. Select Azure SQL Database from the gallery, and then select Continue.
+
+c. On the New connection (Azure SQL Database) page, select your Azure subscription, server name and database name from the dropdown list. Then select SQL authentication under Authentication type, specify the username and password. 'Test connection' and select 'Create'.
+d.Select the newly created linked service as sink, then select 'Next'.
+
+11) On the Destination data store page, select Use existing table and select the dbo.emp table. Then select Next.
+
+12) On the Column mapping page, notice that the second and the third columns in the input file are mapped to the FirstName and LastName columns of the emp table. Adjust the mapping to make sure that there is no error, and then select Next.
+
+13) On the Settings page, under Task name, enter 'CopyFromBlobToSqlPipeline', and then select Next.
+14) On the Summary page, review the settings, and then select Next.
+15) On the Deployment page, select Monitor to monitor the pipeline (task).
+16) On the Pipeline runs page, select Refresh to refresh the list. Select the link under Pipeline name to view activity run details or rerun the pipeline.
+17) On the "Activity runs" page, select the Details link (eyeglasses icon) under Activity name column for more details about copy operation. To go back to the "Pipeline runs" view, select the All pipeline runs link in the breadcrumb menu. To refresh the view, select Refresh.
+
+18) Verify that the data is inserted into the dbo.emp table in your SQL Database.
+
+19) Select the Author tab on the left to switch to the editor mode. 
+
+-----------------------------------------------------------------------------------------------------------------------
+
+
+Deploy a Databricks notebook inside Azure.
+Then create a Databricks linked service.
+
+
+
+
+
+ 
