@@ -1,0 +1,113 @@
+What is Databricks?
+
+Databricks is a unified, open analytics platform for building, deploying, sharing, and maintaining enterprise-grade data, analytics, and AI solutions at scale. The Databricks Data Intelligence Platform integrates with cloud storage and security in your cloud account, and manages and deploys cloud infrastructure on your behalf.
+
+Databricks uses generative AI with the data lakehouse to understand the unique semantics of your data. Then, it automatically optimizes performance and manages infrastructure to match your business needs.
+
+Natural language processing learns your business’s language, so you can search and discover data by asking a question in your own words. Natural language assistance helps you write code, troubleshoot errors, and find answers in documentation.
+
+What is Databricks used for?
+Databricks provides tools that help you connect your sources of data to one platform to process, store, share, analyze, model, and monetize datasets with solutions from BI to generative AI.
+
+The Databricks workspace provides a unified interface and tools for most data tasks, including:
+
+Data processing scheduling and management, in particular ETL
+
+Generating dashboards and visualizations
+
+Managing security, governance, high availability, and disaster recovery
+
+Data discovery, annotation, and exploration
+
+Machine learning (ML) modeling, tracking, and model serving
+
+Generative AI solutions
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+Databricks is the founder and pioneer of Lakehouse architecture.
+
+Lakehouse architecture combines the features and characteristics of DataWarehouse and DataLake architecture.
+
+It overcomes shortcomings of the DataWarehouse architecture where data of high velocity , variety and volume cannot be stored.
+Only structured data with pre-defined schemas can be stored.
+
+It also removes shortcomings of the DataLake architecture where there is poor data governance , quality , lack of security and ACID transaction support,lack of schema enforcement and lack of itegration woth a data catalog, ineffective partitioning . Databricks lakehouse platform solves these with two technologies DeltaLake and Photon.
+
+Delta Lake - Delta Lake is the optimized storage layer that provides the foundation for storing data and tables in the Databricks lakehouse.
+Delta Lake is open source software that extends Parquet data files with file based transaction log for ACID transactions and scalable metadata handling.
+a) ACID transaction guarantees.
+b) Scalable data and metadata handling of petabyte size.
+c) Audit history and timetravel.
+d)Schema enforcement and schema evolution.
+e)Support for deletes , updates and merges.
+f) Unified streaming and batch data processing.
+g)Compatible with Apache Spark.
+h)Uses Delta tables which are based on Apache Parquet.Delta table are also compatible to work with semi-structured and unstructured data.
+i)Has a transaction log.
+j)It's an open source project.
+
+What is Photon?
+Photon is the nextgen query engine in Databricks Lakehouse platform. 
+Photon is a high-performance Databricks-native vectorized query engine that runs your SQL workloads and DataFrame API calls faster to reduce your total cost per workload.
+
+The following are key features and advantages of using Photon.
+
+Support for SQL and equivalent DataFrame operations with Delta and Parquet tables.
+
+Accelerated queries that process data faster and include aggregations and joins.
+
+Faster performance when data is accessed repeatedly from the disk cache.
+
+Robust scan performance on tables with many columns and many small files.
+
+Faster Delta and Parquet writing using UPDATE, DELETE, MERGE INTO, INSERT, and CREATE TABLE AS SELECT, including wide tables that contain thousands of columns.
+
+Replaces sort-merge joins with hash-joins.
+
+Compatible with Spark APIs.
+
+
+Databricks Lakehouse combines the best of both DataWarehouse and DataLake where structured , semi-structured and unstructured data like videos, images , sensor and weblog data can be stored in high volumes with high velocity , provides fine grained data governance , security , ACID transaction support , support for schemas , data catalog , auditing , SQL type queries for faster update and delete.
+
+Databricks Lakehouse Platform solves data and AI governance challenges with the below features.
+Unity Catalog , Delta Sharing , Control Plane and Data plane.
+
+Unity Catalog provides unified governance model or solution for all data and AI assets including files , tables and machine learning models in your Lakehouse on any cloud.
+
+Unity Catalog simplifies governance of data and AI assets on the Databricks Lakehouse platform by bringing fine-grained governance via one standard interface based on ANSI SQL that works across clouds. With Unity Catalog, data teams benefit from a company-wide catalog with centralized access permissions, and audit controls along with automated lineage and built-in data search and discovery. Unity Catalog also natively supports Delta Sharing, an open standard for securely sharing live data from your lakehouse to any computing platform.
+
+It can be used to access multiple Databricks workspace data and metadata through unified access controls and metastore.
+It can be used for finegrained row and column based access control, view based access control, user and group access based on rules(grant and revoke),privileges or permissions.It uses 3 level namespace. Eg: SELECT * FROM catalog.schema.table.
+
+There are two types of tables - Managed table and external table where metadata is stored in the metastore.
+
+Benefits of Delta Sharing.-- Share live data to any platform.
+a) Open cross platform sharing tool easily allowing data to be shared in DataLake and Apache Parquet format.It provides native integration with PowerBI, Tableaue, Spark, Pandas and Java.
+b) Share live data without copying it.
+c) Centralized administration and governance.
+d) Privacy -safe data clean rooms for secure transfer of data between host and recipient.
+e) Marketplace for data products.
+
+Data Plane and Control Plane --- Part of scurity architecture of the Databricks Lakehouse Platform.
+Control Plane-- The control plane is the management plane where Databricks runs the workspace application and manages notebooks, configuration and clusters. 
+Data Plane-- The data plane handles your data processing. With serverless deployments, the data plane exists in your Databricks account rather than your cloud service provider account. You can enforce your data exfiltration protection requirements with Databricks with security controls like customer-managed VPCs/VNets and admin console options that disable export.
+
+Suppose you have a data engineer that signs in to Databricks and writes a notebook that transforms raw data in Kafka to a normalized data set sent to storage such as Amazon S3 or Azure Data Lake Storage or Google Cloud Storage. The following steps make that happen:
+
+The data engineer seamlessly authenticates, via your single sign-on if desired, to the Databricks web UI in the control plane.
+As the data engineer writes code, their web browser sends it to the control plane. JDBC/ODBC requests also follow the same path.
+When ready, the control plane creates a Databricks cluster in the data plane, and sends the data engineer’s code.
+The cluster pulls from Kafka, transforms the data and writes it to your storage.
+The cluster reports status and any outputs back to the control plane.
+The data engineer doesn’t need to worry about many of the details — they simply write the code and Databricks runs it.
+
+Databricks Lakehouse platform supports data warehousing with Databricks SQL.
+
+Kafka,Kinsesis,DataLake,Spark,AWS|----------------->------------------>------------------>StreamingAnalytics,BI&Reporting,Datascience&ML,DataSharing.
+                   Raw ingestion and history    Filtered,cleaned and augmented        Business level aggregates 
+
+Delta Live tables:
+CREATE LIVE TABLE raw_data as SELECT * FROM json.'_'
+CREATE LIVE TABLE clean_data as SELECT _ FROM LIVE.raw_data
+                                                 
+ 

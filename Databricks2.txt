@@ -1,0 +1,39 @@
+Databricks SQL.
+Create a Catalog and Schema.
+Catalog ---> Schema ---> Table .
+
+SELECT CURRENT_CATALOG().
+SELECT CURRENT_DATABASE().
+
+CREATE CATALOG IF NOT EXISTS BO_DAWD_DEMO;
+
+Change the ownership of catalog.
+
+CREATE SCHEMA IF NOT EXISTS DAWD_V2.
+
+Data ingestion.
+
+CREATE OR MODIFY TABLE FROM FILE UPLOAD.
+
+CREATE OR REPLACE TABLE AS SELECT * FROM TABLE;
+
+SELECT * FROM CATALOG.SCHEMA.TABLE1;
+
+https://learn.microsoft.com/en-us/azure/databricks/sql/language-manual/delta-update
+
+https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-dml-insert-into.html
+
+https://databricks.sjc1.qualtrics.com/jfe/form/SV_ahIZxBAesW0RYpw
+
+Dashboard shared with stakeholders. 
+
+SELECT SUM(TOTAL_PRICE) AS TOTA_ SALES FROM SALES 
+
+
+
+
+
+
+
+
+
