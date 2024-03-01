@@ -4,7 +4,7 @@ Databricks is a unified, open analytics platform for building, deploying, sharin
 
 Databricks uses generative AI with the data lakehouse to understand the unique semantics of your data. Then, it automatically optimizes performance and manages infrastructure to match your business needs.
 
-Natural language processing learns your business’s language, so you can search and discover data by asking a question in your own words. Natural language assistance helps you write code, troubleshoot errors, and find answers in documentation.
+Natural language processing learns your businessâ€™s language, so you can search and discover data by asking a question in your own words. Natural language assistance helps you write code, troubleshoot errors, and find answers in documentation.
 
 What is Databricks used for?
 Databricks provides tools that help you connect your sources of data to one platform to process, store, share, analyze, model, and monetize datasets with solutions from BI to generative AI.
@@ -96,10 +96,10 @@ Suppose you have a data engineer that signs in to Databricks and writes a notebo
 
 The data engineer seamlessly authenticates, via your single sign-on if desired, to the Databricks web UI in the control plane.
 As the data engineer writes code, their web browser sends it to the control plane. JDBC/ODBC requests also follow the same path.
-When ready, the control plane creates a Databricks cluster in the data plane, and sends the data engineer’s code.
+When ready, the control plane creates a Databricks cluster in the data plane, and sends the data engineerâ€™s code.
 The cluster pulls from Kafka, transforms the data and writes it to your storage.
 The cluster reports status and any outputs back to the control plane.
-The data engineer doesn’t need to worry about many of the details — they simply write the code and Databricks runs it.
+The data engineer doesnâ€™t need to worry about many of the details â€” they simply write the code and Databricks runs it.
 
 Databricks Lakehouse platform supports data warehousing with Databricks SQL.
 
@@ -109,5 +109,8 @@ Kafka,Kinsesis,DataLake,Spark,AWS|----------------->------------------>---------
 Delta Live tables:
 CREATE LIVE TABLE raw_data as SELECT * FROM json.'_'
 CREATE LIVE TABLE clean_data as SELECT _ FROM LIVE.raw_data
+
+select * from samples.nyctaxi.trips
+select * from samples.tpch.customer
                                                  
  
