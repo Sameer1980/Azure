@@ -29,6 +29,8 @@ Dashboard shared with stakeholders.
 
 SELECT SUM(TOTAL_PRICE) AS TOTA_ SALES FROM SALES 
 
+select * from samples.tpch.nation where n_name like 'UNITED%'
+
 
 
 
