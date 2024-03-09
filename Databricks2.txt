@@ -31,6 +31,23 @@ SELECT SUM(TOTAL_PRICE) AS TOTA_ SALES FROM SALES
 
 select * from samples.tpch.nation where n_name like 'UNITED%'
 
+select a.c_name AS customername, 
+a.c_address AS cust_address,
+b.s_name As suppliername,
+b.s_address AS supp_address ,
+c.n_name AS countryname,
+d.r_name AS regionname
+from samples.tpch.customer a,
+samples.tpch.supplier b,
+samples.tpch.nation c,
+samples.tpch.region d
+where a.c_nationkey=b.s_nationkey
+and a.c_nationkey=c.n_nationkey
+and c.n_regionkey=d.r_regionkey
+and d.r_regionkey=2
+and c.n_nationkey=8
+
+
 
 
 
