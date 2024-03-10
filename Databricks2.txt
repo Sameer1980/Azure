@@ -47,6 +47,8 @@ and c.n_regionkey=d.r_regionkey
 and d.r_regionkey=2
 and c.n_nationkey=8
 
+describe table extended `samples`.`nyctaxi`.`trips`;
+
 
 
 
