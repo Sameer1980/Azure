@@ -106,6 +106,15 @@ Databricks Lakehouse platform supports data warehousing with Databricks SQL.
 Kafka,Kinsesis,DataLake,Spark,AWS|----------------->------------------>------------------>StreamingAnalytics,BI&Reporting,Datascience&ML,DataSharing.
                    Raw ingestion and history    Filtered,cleaned and augmented        Business level aggregates 
 
+---------------------------------------------------------------------------------------------------------------------
+An Azure Databricks table is a collection of structured data. A Delta table stores data as a directory of files on cloud object storage and registers table metadata to the metastore within a catalog and schema. As Delta Lake is the default storage provider for tables created in Azure Databricks, all tables created in Databricks are Delta tables, by default. Because Delta tables store data in cloud object storage and provide references to data through a metastore, users across an organization can access data using their preferred APIs; on Databricks, this includes SQL, Python, PySpark, Scala, and R.
+
+What is a managed table?
+Azure Databricks manages both the metadata and the data for a managed table; when you drop a table, you also delete the underlying data. Data analysts and other users that mostly work in SQL may prefer this behavior. Managed tables are the default when creating a table. The data for a managed table resides in the LOCATION of the database it is registered to. This managed relationship between the data location and the database means that in order to move a managed table to a new database, you must rewrite all data to the new location.
+----------------------------------------------------------------------------------------------------------------
+What is an unmanaged table?
+Azure Databricks only manages the metadata for unmanaged (external) tables; when you drop a table, you do not affect the underlying data. Unmanaged tables will always specify a LOCATION during table creation; you can either register an existing directory of data files as a table or provide a path when a table is first defined. Because data and metadata are managed independently, you can rename a table or register it to a new database without needing to move any data. Data engineers often prefer unmanaged tables and the flexibility they provide for production data.
+
 Delta Live tables:
 CREATE LIVE TABLE raw_data as SELECT * FROM json.'_'
 CREATE LIVE TABLE clean_data as SELECT _ FROM LIVE.raw_data
