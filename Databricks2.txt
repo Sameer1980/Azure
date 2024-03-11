@@ -74,6 +74,41 @@ hive_metastore.default.customer_sales_data_set
 
 select current_date or  SELECT current_date();
 
+insert into hive_metastore.default.customer_sales_data_set
+values (
+'9991',
+'CA-2024-999999',
+current_date(),
+'2024-03-15',
+'Standard Class',
+'SB-11111',
+'Samir Banerjee',
+'Consumer',
+'India',
+'Kolkata',
+'WestBengal',
+71004,
+'East',
+'FUR-0000-1111',
+'Furniture',
+'Furnishings',
+100.1,
+1,
+0.9,
+4.2914)
+select * from hive_metastore.default.customer_sales_data_set where address_country='India'
+create table hive_metastore.default.customer_sales_data_set_IND_BKP
+as select * from hive_metastore.default.customer_sales_data_set
+where orderid='CA-2024-999999';
+
+update hive_metastore.default.customer_sales_data_set
+set shipdate='2024-03-14'
+where
+orderid='CA-2024-999999'
+
+
+
+
 
 
 
