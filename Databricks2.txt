@@ -48,6 +48,34 @@ and d.r_regionkey=2
 and c.n_nationkey=8
 
 describe table extended `samples`.`nyctaxi`.`trips`;
+select count(1) from samples.nyctaxi.trips;
+-- Only possible on Managed tables .eg: one created from xls or csv sheets.
+select * from hive_metastore.default.customer_sales_data_set
+create view hive_metastore.default.customer_sales_data_set_VW as 
+select 
+orderID,
+Orderdate,
+shipdate,
+shipmode,
+customerid,
+customername,
+segment,
+address_country,
+address_city,
+address_state,
+address_postal_code,
+product_id,
+category,
+sub_category,
+sales,
+quantity
+from 
+hive_metastore.default.customer_sales_data_set
+
+select current_date or  SELECT current_date();
+
+
+
 
 
 
