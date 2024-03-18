@@ -1,0 +1,287 @@
+Azure Stream Analytics
+---------------------------------
+
+Azure Event Hubs is a cloud native data streaming service that can stream millions of events per second, with low latency, from any source to any destination. Event Hubs is compatible with Apache Kafka, and it enables you to run existing Kafka workloads without any code changes.
+
+Azure Event Hubs is the preferred event ingestion layer of any event streaming solution that you build on top of Azure. It seamlessly integrates with data and analytics services inside and outside Azure to build your complete data streaming pipeline to serve following use cases.
+
+Real-time analytics with Azure Stream Analytics to generate real-time insights from streaming data.
+Analyze and explore streaming data with Azure Data Explorer.
+Create your own cloud native applications, functions, or microservices that run on streaming data from Event Hubs.
+Stream events with schema validation using a built-in schema registry to ensure quality and compatibility of streaming data.
+
+Key capabilities
+a)Apache Kafka on Azure Event Hubs.
+----------------------------------------------
+Azure Event Hubs is a multi-protocol event streaming engine that natively supports AMQP, Apache Kafka, and HTTPs protocols. Since it supports Apache Kafka, you bring Kafka workloads to Azure Event Hubs without doing any code change. You don't need to set up, configure, and manage your own Kafka clusters or use a Kafka-as-a-Service offering that's not native to Azure.
+
+Event Hubs is built from the ground up as a cloud native broker engine. Hence, you can run Kafka workloads with better performance, better cost efficiency and with no operational overhead.
+
+b)Schema Registry in Azure Event Hubs
+---------------------------------------------------------
+Azure Schema Registry in Event Hubs provides a centralized repository for managing schemas of events streaming applications. Azure Schema Registry comes free with every Event Hubs namespace, and it integrates seamlessly with your Kafka applications or Event Hubs SDK based applications.
+
+It ensures data compatibility and consistency across event producers and consumers. Schema Registry enables seamless schema evolution, validation, and governance, and promoting efficient data exchange and interoperability.
+
+Schema Registry seamlessly integrates with your existing Kafka applications and it supports multiple schema formats including Avro and JSON Schemas.
+
+c)Real-time processing of streaming events with Azure Stream Analytics
+------------------------------------------------------------------------------------
+Event Hubs integrates seamlessly with Azure Stream Analytics to enable real-time stream processing. With the built-in no-code editor, you can effortlessly develop a Stream Analytics job using drag-and-drop functionality, without writing any code.
+Alternatively, developers can use the SQL-based Stream Analytics query language to perform real-time stream processing and take advantage of a wide range of functions for analyzing streaming data.
+
+d)Exploring streaming data with Azure Data Explorer
+----------------------------------------------------
+Azure Data Explorer is a fully managed platform for big data analytics that delivers high performance and allows for the analysis of large volumes of data in near real time. By integrating Event Hubs with Azure Data Explorer, you can easily perform near real-time analytics and exploration of streaming data.
+
+e)Rich ecosystem– Azure functions, SDKs, and Kafka ecosystem
+------------------------------------------------------------------
+Ingest, buffer, store, and process your stream in real time to get actionable insights. Event Hubs uses a partitioned consumer model, enabling multiple applications to process the stream concurrently and letting you control the speed of processing. Azure Event Hubs also integrates with Azure Functions for serverless architectures.
+
+With a broad ecosystem available for the industry-standard AMQP 1.0 protocol and SDKs available in various languages: .NET, Java, Python, JavaScript, you can easily start processing your streams from Event Hubs. All supported client languages provide low-level integration.
+
+The ecosystem also provides you with seamless integration Azure Functions, Azure Spring Apps, Kafka Connectors, and other data analytics platforms and technologies such as Apache Spark and Apache Flink.
+
+f)Flexible and cost-efficient event streaming
+-----------------------------------------------------------------------
+You can experience flexible and cost-efficient event streaming through Event Hubs' diverse selection of tiers – including Standard, Premium, and Dedicated. These options cater to data streaming needs ranging from a few MB/s to several GB/s, allowing you to choose the perfect match for your requirements.
+
+g)Scalable
+--------------------------------------------
+With Event Hubs, you can start with data streams in megabytes, and grow to gigabytes or terabytes. The Auto inflate feature is one of the many options available to scale the number of throughput units or processing units to meet your usage needs.
+
+h)Capture streaming data for long term retention and batch analytics
+---------------------------------------------------
+Capture your data in near-real time in an Azure Blob storage or Azure Data Lake Storage for long-term retention or micro-batch processing. You can achieve this behavior on the same stream you use for deriving real-time analytics. Setting up capture of event data is fast.
+
+
+End-to-end
+
+Azure Event Hubs --> Azure Stream analytics --> Power BI dashboard.
+
+On-demand data stream processing solution.
+----------------------------------------------
+Azure Event Hub]------------------>ADLS-Gen2----> Azure Stream analytics---> Power BI dashboard
+IoT Hub         ] ---------------->
+
+Event producer ----------------------> Event Processor -------------------> Event Consumer
+Connected Factory Sensors             Azure Stream analytics                 PowerBI
+Azure Event Hubs     
+
+
+a)The "on-demand" approach for processing streaming data involves persisting all incoming data in a data store, such as Azure Data Lake Storage (ADLS) Gen2. This method allows you to collect streaming data over time and store it as static data. You can then process the static data in batches when convenient or during times when compute costs are lower.    
+b)An event processor is responsible for the ingestion and transformation of streaming event data.
+c)An event producer, which generates an event data stream.
+d) An event processor responsible for the ingestion and transformation of streaming event data.
+e)An event consumer that displays or consumes event data and acts on it.
+f) Azure Blob storage provides an ingestion point for data streaming in an event processing solution that uses static data as a source.
+g) Power BI provides a platform for visualizing and analyzing aggregated data in near-real-time. Azure Stream Analytics can target Power BI as an output destination. Processed data is passed into Power BI to facilitate near-real-time dashboard updates.  
+
+Define an Event Hubs namespace.
+-----------------------------------------
+There are two main steps when creating and configuring new Azure Event Hubs. The first step is to define the Event Hubs namespace. The second step is to create an Event Hub in that namespace.
+
+Define an Event Hubs namespace
+---------------------------------
+An Event Hubs namespace is a containing entity for managing one or more Event Hubs. Creating an Event Hubs namespace typically involves the following configuration:
+
+Define namespace-level settings
+------------------------------------
+Certain settings such as namespace capacity (configured using throughput units), pricing tier, and performance metrics are defined at the namespace level. These settings apply to all the Event Hubs within that namespace. If you don't define these settings, a default value is used: 1 for capacity and Standard for pricing tier.
+
+Keep the following aspects in mind:
+
+You must balance your configuration against your Azure budget expectations.
+
+
+1. Select a unique name for the namespace. The namespace is accessible through this URL: namespace.servicebus.windows.net
+
+2. Define the following optional properties:
+
+Enable Kafka. This option enables Kafka apps to publish events to the Event Hub.
+
+Make this namespace zone redundant. Zone-redundancy replicates data across separate data centers with their independent power, networking, and cooling infrastructures.
+
+Enable Auto-Inflate and Auto-Inflate Maximum Throughput Units. Auto-Inflate provides an automatic scale-up option by increasing the number of throughput units up to a maximum value. This option is useful to avoid throttling in situations when incoming or outgoing data rates exceed the currently set number of throughput units.
+
+Azure CLI commands to create an Event Hubs namespace
+To create a new Event Hubs namespace, use the az eventhubs namespace commands. Here's a brief description of the subcommands you'll use in the exercise.
+
+Command                          Description
+
+
+
+create                Create the Event Hubs namespace.
+
+
+
+authorization-rule       All Event Hubs within the same Event Hubs namespace share common connection credentials. You'll need these credentials when you configure apps to send and receive messages using the Event Hub. This command returns the connection string for your Event Hubs namespace.
+
+
+
+Configure a new Event Hub
+After you create the Event Hubs namespace, you can create an Event Hub. When creating a new Event Hub, there are several mandatory parameters.
+
+The following parameters are required to create an Event Hub:
+
+Event Hub name - Event Hub name that is unique within your subscription and:
+
+Is between 1 and 50 characters long.
+
+Contains only letters, numbers, periods, hyphens, and underscores.
+
+Starts and ends with a letter or number.
+
+Partition Count - The number of partitions required in an Event Hub (between 2 and 32). The partition count should be directly related to the expected number of concurrent consumers and can't be changed after the hub has been created. The partition separates the message stream so that consumer or receiver apps only need to read a specific subset of the data stream. If not defined, this value defaults to 4.
+
+Message Retention - The number of days (between 1 and 7) that messages will remain available if the data stream needs to be replayed for any reason. If not defined, this value defaults to 7.
+
+You can also optionally configure an Event Hub to stream data to an Azure Blob storage or Azure Data Lake Store account.
+
+Azure CLI commands to create an Event Hub
+To create a new Event Hub with the Azure CLI, you'll run the az eventhubs eventhub command set. Here's a brief description of the subcommands we'll be using.
+
+Command
+
+Description
+
+create
+
+Creates the Event Hub in a specified namespace.
+
+show
+
+Displays the details of your Event Hub.
+
+Summary
+To deploy Azure Event Hubs, you must configure an Event Hubs namespace, and then configure the Event Hub itself. In the next unit, you'll go through the detailed configuration steps to create a new namespace and Event Hub.
+
+Create an Event Hubs namespace (through sandbox a/c)
+--------------------------------------------------------
+Create an Event Hubs namespace
+Let's create an Event Hubs namespace using Bash shell supported by Azure Cloud shell.
+
+1. First, set default values for the Azure CLI in Cloud Shell. This will keep you from having to enter these values every time. In particular, let's set the resource group and location. Enter the following command into the Azure CLI, and feel free to replace the location with one close to you.
+
+The free sandbox allows you to create resources in a subset of the Azure global regions. Select a region from this list when you create resources:
+
+westus2
+
+southcentralus
+
+centralus
+
+eastus
+
+westeurope
+
+southeastasia
+
+japaneast
+
+brazilsouth
+
+australiasoutheast
+
+centralindia
+
+1. az configure --defaults group=[sandbox Resource Group] location=westus2
+
+2.Create the Event Hubs namespace running the az eventhubs namespace create command. Use the following parameters.
+
+Parameter
+
+Description
+
+--name (required)
+
+Enter a 6-50 characters-long unique name for your Event Hubs namespace. The name should contain only letters, numbers, and hyphens. It should start with a letter and end with a letter or number.
+
+--resource-group (required)
+
+This will be the pre-created Azure sandbox resource group supplied from the defaults.
+
+--location (optional)
+
+Enter the location of your nearest Azure datacenter, this will use your default.
+
+--sku (optional)
+
+The pricing tier for the namespace [Basic / Standard], defaults to Standard. This determines the connections and consumer thresholds.
+
+3)Set the name into an environment variable so we can reuse it.
+NS_NAME=ehubns-$RANDOM
+
+4)You can use the Copy button to copy commands to the clipboard. To paste, right-click on a new line in the Cloud Shell window and select Paste, or use the Shift+Insert keyboard shortcut (⌘+V on macOS).
+
+az eventhubs namespace create --name $NS_NAME
+
+Note
+Azure will validate the name you enter, and the CLI returns Bad Request if the name exists or is invalid. Try a different name by changing your environment variable and reissuing the command.
+
+Note
+Azure will validate the name you enter, and the CLI returns Bad Request if the name exists or is invalid. Try a different name by changing your environment variable and reissuing the command.
+
+5) Fetch the connection string for your Event Hubs namespace running the following command. You'll need this to configure applications to send and receive messages using your Event Hub.
+
+az eventhubs namespace authorization-rule keys list \
+    --name RootManageSharedAccessKey \
+    --namespace-name $NS_NAME
+
+
+This command returns a JSON block with the connection string for your Event Hubs namespace that you'll use later to configure your publisher and consumer applications. Save the value of the following keys for later use.
+
+primaryConnectionString
+
+primaryKey
+
+Create an Event Hub
+----------------------------------------
+Now let's create your new Event Hub.
+
+1. Sign in to the 
+Azure portal
+ using the same account you activated the sandbox with.
+
+2. Create a new Event Hub by running the eventhub create command. It needs the following parameters.
+
+Parameter
+
+Description
+
+--name (required)
+
+Enter a name for your Event Hub.
+
+--resource-group (required)
+
+Resource group owner.
+
+--namespace-name (required)
+
+Enter the namespace you created.
+
+Let's define the Event Hub name in an environment variable first using the Cloud Shell.
+
+HUB_NAME=hubname-$RANDOM
+
+az eventhubs eventhub create --name $HUB_NAME --namespace-name $NS_NAME
+
+3. View the details of your Event Hub by running the eventhub show command. It needs the following parameters.
+
+az eventhubs eventhub show --namespace-name $NS_NAME --name $HUB_NAME
+
+View the Event Hub in the Azure portal
+-----------------------------------------------------------------------------------------------------
+Next, let's see what this looks like in the Azure portal.
+
+1. In the Search bar at the top of portal, enter Event Hubs. The Event Hubs pane appears.
+
+2. Select your namespace to open it.
+
+3. in the left menu pane, under Entities, select Event Hubs.
+
+Your Event Hub appears with a status of Activating, and default values for Message Retention (7) and Partition Count of (4).
+
+
+

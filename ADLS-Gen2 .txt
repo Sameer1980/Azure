@@ -1,0 +1,107 @@
+1)Data Lake Storage is designed to deal with this variety and volume of data at exabyte scale while securely handling hundreds of gigabytes of throughput. With this, you can use Data Lake Storage Gen2 as the basis for both real-time and batch solutions.
+
+2) Hadoop compatible access
+------------------------------------------------------------------------------
+A benefit of Data Lake Storage is that you can treat the data as if it's stored in a Hadoop Distributed File System (HDFS). With this feature, you can store the data in one place and access it through compute technologies including Azure Databricks, Azure HDInsight, and Azure Synapse Analytics without moving the data between environments. The data engineer also has the ability to use storage mechanisms such as the parquet format, which is highly compressed and performs well across multiple platforms using an internal columnar storage.
+
+3) Security
+----------------------------------------------------------------------------------------------------------------
+Data Lake Storage supports access control lists (ACLs) and Portable Operating System Interface (POSIX) permissions that don't inherit the permissions of the parent directory. In fact, you can set permissions at a directory level or file level for the data stored within the data lake, providing a much more secure storage system. This security is configurable through technologies such as Hive and Spark or utilities such as Azure Storage Explorer, which runs on Windows, macOS, and Linux. All data that is stored is encrypted at rest by using either Microsoft or customer-managed keys.
+
+4)
+Data Lake Storage Gen2 includes the following capabilities.
+
+✓   Hadoop-compatible access
+
+✓   Hierarchical directory structure
+
+✓   Optimized cost and performance
+
+✓   Finer grain security model
+
+✓   Massive scalability
+
+5)Hadoop-compatible access
+Azure Data Lake Storage Gen2 is primarily designed to work with Hadoop and all frameworks that use the Apache Hadoop Distributed File System (HDFS) as their data access layer. Hadoop distributions include the Azure Blob File System (ABFS) driver, which enables many applications and frameworks to access Azure Blob Storage data directly. The ABFS driver is optimized specifically for big data analytics. The corresponding REST APIs are surfaced through the endpoint dfs.core.windows.net.
+
+Data analysis frameworks that use HDFS as their data access layer can directly access Azure Data Lake Storage Gen2 data through ABFS. The Apache Spark analytics engine and the Presto SQL query engine are examples of such frameworks.
+
+6) Hierarchical directory structure
+-----------------------------------------------------------------
+The hierarchical namespace is a key feature that enables Azure Data Lake Storage Gen2 to provide high-performance data access at object storage scale and price. You can use this feature to organize all the objects and files within your storage account into a hierarchy of directories and nested subdirectories. In other words, your Azure Data Lake Storage Gen2 data is organized in much the same way that files are organized on your computer.
+
+Operations such as renaming or deleting a directory, become single atomic metadata operations on the directory. There's no need to enumerate and process all objects that share the name prefix of the directory.
+
+7) Optimized cost and performance
+-----------------------------------------------------------------------------------------
+Azure Data Lake Storage Gen2 is priced at Azure Blob Storage levels. It builds on Azure Blob Storage capabilities such as automated lifecycle policy management and object level tiering to manage big data storage costs.
+
+Performance is optimized because you don't need to copy or transform data as a prerequisite for analysis. The hierarchical namespace capability of Azure Data Lake Storage allows for efficient access and navigation. This architecture means that data processing requires fewer computational resources, reducing both the speed and cost of accessing data.
+
+8) Built on Azure Blob Storage
+--------------------------------------------------------------------
+The data that you ingest persist as blobs in the storage account. The service that manages blobs is the Azure Blob Storage service. Data Lake Storage Gen2 describes the capabilities or "enhancements" to this service that caters to the demands of big data analytic workloads.
+
+Because these capabilities are built on Blob Storage, features such as diagnostic logging, access tiers, and lifecycle management policies are available to your account. Most Blob Storage features are fully supported, but some features might be supported only at the preview level and there are a handful of them that aren't yet supported. For a complete list of support statements, see Blob Storage feature support in Azure Storage accounts. The status of each listed feature will change over time as support continues to expand.
+
+9) Encryption at REST
+--------------------------------
+Writing data to Azure Storage
+       SSE 256-bit AES cipher
+DATA ----------------------> Azure Storage
+
+i)All data written to Azure Storage is automatically encrypted by Storage Service Encryption (or SSE) with a 256-bit Advanced Encryption Standard (or AES) cipher and is FIPS 140-2 compliant.
+
+ii)Azure Storage supports Azure Active Directory and role-based access control (or RBAC) for both resource management and data operations. You can assign RBAC roles that are scoped to an individual container, an individual queue, a storage account, a resource group, or a subscription.
+
+iii)Azure Storage accounts can create authorized apps in Active Directory to control access to the data in blobs and queues.
+
+iv)In Azure Storage accounts, shared keys give access to everything in the account.
+Clients can use a shared key or shared secret as an authentication option and is one of the easiest to use. It supports Blobs, files, queues, and tables.
+
+Blob and Queue storage authentication
+---------------------------------------
+
+Microsoft Azure storage account ---- > Active directory -----> Blob and Queue storage accounts.
+Storage account keys authentication for other storage models.
+
+Apps can issue GET request against Blob resource. HTTP headers control configuration of REST APIs.
+
+Storage account keys -- > Primary and Secondary keys.
+
+Access control and threat protection
+-------------------------------------------
+i)As a best practice, for untrusted clients, use a shared access signature (SAS). A SAS is a string that contains a security token that can be attached to a URI. Use a SAS to delegate access to storage objects and specify constraints, such as the permissions and the time range of access.
+ii)Use an account-level SAS to allow access to anything that a service-level SAS can allow, plus additional resources and abilities. For example, you can use an account-level SAS to allow file systems to be created.
+iii)The lightweight service authenticates the client, as needed. It then generates a SAS. After receiving the SAS, the client can access storage account resources directly. The SAS defines the client's permissions and access interval, and it reduces the need to route all data through the front-end proxy service.
+iv)You can restrict access to specific IP Addresses,range of IP Addresses,Virtual Network.
+v)Security alerts are triggered when anomalies occur. These security alerts are integrated with Azure Security Center. They are also sent via email to subscription administrators with details of suspicious activity and recommendations on how to investigate and remediate threats.
+vi)Azure Defender for Storage is currently available for Azure File Storage.
+    Feedback: Azure Defender for Storage is currently available for Azure Data Lake Storage Gen 2.\
+    Azure Defender for Storage is currently available for Blob Storage.
+
+
+Azure Storage account security feature:- 
+1) Azure Security Center for security alerts sent via emails.
+2) Azure Defender for File storage , BLOB storage, ADLS-Gen2.
+3) Shared access signature (SAS) for third party , untrusted clients.
+4) RBAC(Role Based Access Control) - for Container, Queue , Storage account , Resource group and Subscription.
+5) Storage Service Encryption (or SSE) with Advanced Encryption Standard (or AES) for all data written to Azure storage.
+6) Active directory (AD) authetication. 
+7)Data Lake Storage supports access control lists (ACLs) and Portable Operating System Interface (POSIX) permissions that don't inherit the permissions of the parent directory.
+
+
+10)
+
+Four stages of Azure stream analytics
+------------------------------------------------
+
+Ingestion   ----------------------------------> Store------------------------------> Prep&Train----------------------> Model & Serve
+ 
+---------                                                               
+Azure Data Factory (Batch mode)                ADLS-Gen2                 Databricks /Azure Synapse / Spark / Scala     SQL/CosmosDB/PowerBI
+Apache Kafka (Stream mode)          
+
+
+
+
