@@ -283,5 +283,417 @@ Next, let's see what this looks like in the Azure portal.
 
 Your Event Hub appears with a status of Activating, and default values for Message Retention (7) and Partition Count of (4).
 
+Configure applications to send or receive messages through an Event Hub.
+---------------------------------------------------------------------------
+a) Shared access policy name needs to be configured for an application to send messages to an event hub, so that the application can create connection credentials.
+b) Primary Shared Access Key needs to be configured for an application to send messages to an event hub so that the application can create connection credentials.
+c) Event Hub namespace name needs to be configured for an application to send messages to an event hub
+
+
+i)Set the storage account name into a variable. It must be between 3 and 24 characters in length and use numbers and lower-case letters only. It also must be unique within Azure.
+
+In this unit, you'll configure these applications to send or receive messages through your Event Hub. These applications are stored in a GitHub repository.
+
+You'll configure two separate applications; one acts as the message sender (SimpleSend), the other as the message receiver (EventProcessorSample). These are Java applications, which enable you to do everything within the browser. However, the same configuration is needed for any platform, such as .NET.
+
+Create a general-purpose, standard storage account
+The Java receiver application, that you'll configure in this unit, stores messages in Azure Blob Storage. Blob Storage requires a storage account.
+
+1. In Cloud Shell, create a storage account (general-purpose V2) running the storage account create command. Remember we set a default resource group and location, so even though those parameters are normally required, we can leave them off.
+
+STORAGE_NAME=storagename$RANDOM
+
+2) Next, run the following command to create the storage account.
+storage account create --name $STORAGE_NAME --sku Standard_RAGRS --encryption-service blob
+
+If the storage account creation fails, change your environment variable, and try again.
+
+3) List all the access keys associated with your storage account by running the account keys list command. It takes your account name and the resource group (which is defaulted).
+az storage account keys list --account-name $STORAGE_NAME
+
+Access keys associated with your storage account are listed. Copy and save the value of key for future use. You'll need this key to access your storage account.
+
+4) View the connections string for your storage account running the following command.
+     az storage account show-connection-string -n $STORAGE_NAME
+
+5)This command returns the connection details for the storage account. Copy and save the value of connectionString. It should look something like.
+
+"DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName=storage_account_name;AccountKey=VZjXuMeuDqjCkT60xX6L5fmtXixYuY2wiPmsrXwYHIhwo736kSAUAj08XBockRZh7CZwYxuYBPe31hi8XfHlWw=="
+
+6) Create a container called messages in your storage account by running the following command. Use the connectionString you copied in the previous step.
+
+az storage container create --name messages --connection-string "<connection string here>"
+
+7) Clone the Event Hubs GitHub repository
+Perform the following steps to clone the Event Hubs GitHub repository with git. You can execute this right in Cloud Shell.
+
+1. The source files for the applications that you'll build in this unit are located in a 
+GitHub repository
+. Run the following commands to make sure that you are in your home directory in Cloud Shell, and then to clone this repository.
+
+cd ~
+git clone https://github.com/Azure/azure-event-hubs.git
+
+The repository is cloned to your home folder.
+
+8) Edit SimpleSend.java
+You're going to use the built-in Cloud Shell editor. You'll use the editor to modify the SimpleSend application, and add your Event Hubs namespace, Event Hub name, shared access policy name, and primary key. The main commands appear at the bottom of the editor window.
+
+You'll need to write out your edits by pressing Ctrl+O, and then pressing Enter to confirm the output file name. Exit the editor by pressing Ctrl+X. Alternatively, the editor has a "..." menu in the top/right corner for all the editing commands.
+
+1. Change to the SimpleSend folder.
+
+cd ~/azure-event-hubs/samples/Java/Basic/SimpleSend/src/main/java/com/microsoft/azure/eventhubs/samples/SimpleSend
+
+Open Cloud Shell editor in the current folder. This shows a list of files on the left and an editor space on the right.
+
+9) Open the SimpleSend.java file by selecting it from the file list.
+
+10) In the editor, locate and replace the following strings:
+
+"Your Event Hubs namespace name" with the name of your Event Hub namespace.
+
+"Your Event Hub" with the name of your Event Hub.
+
+"Your policy name" with RootManageSharedAccessKey.
+
+"Your primary SAS key" with the value of the primaryKey key for your Event Hub namespace that you saved earlier.
+
+Unlike the terminal window, the editor can use typical copy/paste keyboard accelerator keys for your OS.
+
+If you've forgotten some of them, you can switch down to the terminal window below the editor and run the echo command to list out one of the environment variables. For example:
+echo $NS_NAME
+echo $HUB_NAME
+echo $STORAGE_NAME
+
+11)When you create an Event Hubs namespace, a 256-bit SAS key called RootManageSharedAccessKey is created that has an associated pair of primary and secondary keys that grant send, listen, and manage rights to the namespace. In the previous unit, you displayed the key running an Azure CLI command, and you can also find this key by opening the Shared access policies page for your Event Hubs namespace in the Azure portal.
+
+12) Save SimpleSend.java either through the "..." menu, or the accelerator key (Ctrl+S on Windows and Linux, Cmd+S on macOS).
+
+13) Close the editor with the "..." menu, or the accelerator key CTRL+Q.
+
+14) Use Maven to build SimpleSend.java
+You'll now build the Java application running mvn commands.
+
+1. Revert to the main SimpleSend folder.
+cd ~/azure-event-hubs/samples/Java/Basic/SimpleSend
+
+15)Build the Java SimpleSend application. This ensures that your application uses the connection details for your Event Hub.
+
+mvn clean package -DskipTests
+
+The build process may take several minutes to complete. Ensure that you see the [INFO] BUILD SUCCESS message before continuing.
+
+16) Edit EventProcessorSample.java
+You'll now configure a receiver (also known as subscribers or consumers) application to ingest data from your Event Hub.
+
+For the receiver application, two classes are available: EventHubReceiver and EventProcessorHost. EventProcessorHost is built on top of EventHubReceiver, but provides simpler programmatic interface than EventHubReceiver. EventProcessorHost can automatically distribute message partitions across multiple instances of EventProcessorHost using the same storage account.
+
+In this unit, you'll use the EventProcessorHost method. You'll edit the EventProcessorSample application to add your Event Hubs namespace, Event Hub name, shared access policy name and primary key, storage account name, connection string, and container name.
+
+1. Change to the EventProcessorSample folder running the following command.
+
+cd ~/azure-event-hubs/samples/Java/Basic/EventProcessorSample/src/main/java/com/microsoft/azure/eventhubs/samples/eventprocessorsample
+
+ Open Cloud Shell editor.
+code .
+
+Select the EventProcessorSample.java file.
+
+ Locate and replace the following strings in the editor:
+
+----ServiceBusNamespaceName---- with the name of your Event Hubs namespace.
+
+----EventHubName---- with the name of your Event Hub.
+
+----SharedAccessSignatureKeyName---- with RootManageSharedAccessKey.
+
+----SharedAccessSignatureKey---- with the value of the primaryKey key for your Event Hubs namespace that you saved earlier.
+
+----AzureStorageConnectionString---- with your storage account connection string that you saved earlier.
+
+----StorageContainerName---- with "messages".
+
+----HostNamePrefix---- with the name of your storage account.
+
+Save EventProcessorSample.java either with the "..." menu, or the accelerator key (Ctrl+S on Windows and Linux, Cmd+S on macOS).
+
+ Close the editor.
+
+17) Use Maven to build EventProcessorSample.java
+Change to the main EventProcessorSample folder running the following command.
+
+cd ~/azure-event-hubs/samples/Java/Basic/EventProcessorSample
+
+Build the Java SimpleSend application running the following command. This ensures that your application uses the connection details for your Event Hub.
+
+mvn clean package -DskipTests
+
+The build process may take several minutes to complete. Ensure that you see a [INFO] BUILD SUCCESS message before continuing.
+
+18)Start the sender and receiver apps
+1. Run Java application from the command line by running the java command, and specifying a .jar package. Run the following commands to start the SimpleSend application.
+
+java -jar ./target/simplesend-1.0.0-jar-with-dependencies.jar
+
+When you see Send Complete..., press Enter.
+
+Start the EventProcessorSample application running the following command.
+
+cd ~/azure-event-hubs/samples/Java/Basic/EventProcessorSample
+java -jar ./target/eventprocessorsample-1.0.0-jar-with-dependencies.jar
+
+When messages stop appearing on the console, press Enter or press CTRL+C to end the program.
+
+Exercise - Evaluate the performance of the deployed Event Hub using the Azure portal
+---------------------------------------------------------------------------------------
+
+This module requires a sandbox to complete. The Sandbox gives you access to free resources. Your personal subscription will not be charged. The sandbox may only be used to complete training on Microsoft Learn. Use for any other reason is prohibited, and may result in permanent loss of access to the sandbox.
+
+In this unit, you'll use the Azure portal to verify your Event Hub is working according to expectations. You'll also test how Event Hub messaging works when it's temporarily unavailable, and use Event Hubs metrics to check the performance of your Event Hub.
+
+View Event Hub activity
+----------------------------------------------------------
+1. Sign into the 
+Azure portal
+ using the same account you activated the sandbox with.
+
+2. Find your Event Hub using the Search bar, and open it as we did in the previous exercise.
+
+3. On the Overview page, view the message counts.
+
+4.The SimpleSend and EventProcessorSample applications are configured to send/receive 100 messages. You'll see that the Event Hub has processed 100 messages from the SimpleSend application and has transmitted 100 messages to the EventProcessorSample application.
+
+Test Event Hub resilience
+------------------------------------------
+Perform the following steps to see what happens when an application sends messages to an Event Hub while it's temporarily unavailable.
+1. Resend messages to the Event Hub using the SimpleSend application. Run the following command.
+cd ~
+cd azure-event-hubs/samples/Java/Basic/SimpleSend
+java -jar ./target/simplesend-1.0.0-jar-with-dependencies.jar
+
+2.When you see Send Complete, press Enter.
+3.Select your Event Hub in the Overview screen - this will show details specific to the Event Hub. You can also get to this screen with the Event Hubs entry from the namespace page.
+4.Select Settings > Properties.
+5.Under EVENT HUB STATUS, select Disabled. Save the changes.
+Wait for a minimum of five minutes.
+
+6. Select Active under Event Hub state to re-enable your Event Hub, and save your changes.
+
+7. Rerun the EventProcessorSample application to receive messages. Run the following command.
+cd ~
+cd azure-event-hubs/samples/Java/Basic/EventProcessorSample
+java -jar ./target/eventprocessorsample-1.0.0-jar-with-dependencies.jar
+
+When messages stop being appearing on the console, press Enter.
+
+9. Back in the Azure portal, go back to your Event Hub Namespace. If you're still on the Event Hub page, you can use the breadcrumb on the top of the screen to go backwards. Or you can search for the namespace, and select it.
+
+10. Select Monitoring > Metrics.
+
+11.From the Metric list, select Incoming Messages, and then select Add metric.
+
+12. From the Metric list, select Outgoing Messages, and then select Add metric.
+
+13. At the top right of the chart, select Last 24 hours (Automatic) to change the time period to Last 30 minutes to expand the data graph.
+
+You'll see that though the messages were sent before the Event Hub was taken offline for a period, all 100 messages were successfully transmitted.
+
+Important points.
+------------------
+a) A single publication individual or batch cannot exceed 1MB.
+b) An entity that reads data from Event Hubs can be called a consumer.
+c) An entity that reads data from Event Hubs can be called a Subscriber.
+d) To configure an application to send messages to an Event Hub the Shared Access Policy Name is required.
+e) To configure an application to send messages to an Event Hub the Primary shared access key is required.
+f) To configure an application to send messages to an Event Hub the Event Hub namespace name is required.
+g) To configure an application to send messages to an Event Hub the Event Hub name is required.
+h) Publishers can use either HTTPS or AMQP. AMQP opens a socket and can send multiple messages over that socket.
+
+
+
+AZURE STREAM ANALYTICS
+------------------------------------
+Telemetry data/Streaming data } ---- {KafkaConn/ HTTPS/AQMP} > [Event Hub] ---->  {AzureStream Analytics } ----> ( PowerBI)   
+
+Five types of temporal Windowing functions are supported --Tumbling , Hopping , Sliding , Session , Snapshot.
+
+Tumbling windows are simply a hopping window whose hop is equal to its size.
+Tumbling Windows (non-overlapping) - [12:01 - 12:10] [12:11 - 12:20] [12:21 - 12:30]
+
+Tumbling window query --
+
+SELECT EventName , Count(*) AS Count from EventStream TIMESTAMP BY EventTimestamp GROUP BY EventName , TumblingWindow(minute,10)
+
+Hopping Window - 3 paremeters --> Time Unit (hrs. , min. sc.) , Window size , Hop size.
+
+Hopping Window query --
+
+-- Count the number of times each event occurs every 10 seconds.
+
+SELECT EventName , Count(*) AS Count from EventStream TIMESTAMP BY EventTimestamp GROUP BY EventName ,  HoppingWindow (second , 10 , 5)
+
+Create a query using tumbling windows
+---------------------------------------------------------------------------------
+create a Synapse Analytics query using a 
+Tumbling Window
+. 1) From your Stream Analytics job's blade in the Azure portal , select Query in the left-hand navigation menu.
+
+2)The query will aggregate streaming data received from the Event Hub input and send it to Power BI and Azure Synapse Analytics for visualization and analysis.Clear the edit Query window and paste the following in its place:
+
+WITH Averages AS (
+    SELECT
+        AVG(engineTemperature) averageEngineTemperature,
+        AVG(speed) averageSpeed
+    FROM
+        eventhub TIMESTAMP BY [timestamp]
+    GROUP BY
+        TumblingWindow(Duration(second, 2))
+),
+Anomalies AS (
+    select
+        t.vin,
+        t.[timestamp],
+        t.city,
+        t.region,
+        t.outsideTemperature,
+        t.engineTemperature,
+        a.averageEngineTemperature,
+        t.speed,
+        a.averageSpeed,
+        t.fuel,
+        t.engineoil,
+        t.tirepressure,
+        t.odometer,
+        t.accelerator_pedal_position,
+        t.parking_brake_status,
+        t.headlamp_status,
+        t.brake_pedal_status,
+        t.transmission_gear_position,
+        t.ignition_status,
+        t.windshield_wiper_status,
+        t.abs,
+        (CASE WHEN a.averageEngineTemperature >= 405 OR a.averageEngineTemperature <= 15 THEN 1 ELSE 0 END) AS enginetempanomaly,
+        (CASE WHEN t.engineoil <= 1 THEN 1 ELSE 0 END) AS oilanomaly,
+        (CASE WHEN (t.transmission_gear_position = 'first' OR
+            t.transmission_gear_position = 'second' OR
+            t.transmission_gear_position = 'third') AND
+            t.brake_pedal_status = 1 AND
+            t.accelerator_pedal_position >= 90 AND
+            a.averageSpeed >= 55 THEN 1 ELSE 0 END) AS aggressivedriving
+    FROM eventhub t TIMESTAMP BY [timestamp]
+    INNER JOIN Averages a ON DATEDIFF(second, t, a) BETWEEN 0 And 2
+),
+VehicleAverages AS (
+    SELECT
+        AVG(engineTemperature) averageEngineTemperature,
+        AVG(speed) averageSpeed,
+        System.TimeStamp() AS snapshot
+    FROM
+        eventhub TIMESTAMP BY [timestamp]
+    GROUP BY
+        TumblingWindow(Duration(minute, 2))
+)
+
+-- INSERT INTO POWER BI
+SELECT
+    *
+INTO
+    powerBIAlerts
+FROM
+    Anomalies
+WHERE aggressivedriving = 1 OR enginetempanomaly = 1 OR oilanomaly = 1
+
+-- INSERT INTO SYNAPSE ANALYTICS
+SELECT
+    *
+INTO
+    synapse
+FROM
+    VehicleAverages
+
+
+/* 
+The query averages the engine temperature and speed over a two-second duration by adding TumblingWindow(Duration(second, 2)) to the query'sGROUP BY clause. Then it selects all telemetry data, including the average values from the previous step, and specifies the following anomalies as new fields:
+
+a. enginetempanomaly: When the average engine temperature is >= 405 or <= 15.
+
+b. oilanomaly: When the engine oil <= 1.
+
+c. aggressivedriving: When the transmission gear position is in first, second, or third, and the brake pedal status is 1, the accelerator pedal position >= 90, and the average speed is >= 55.
+
+
+The query outputs all fields from the anomalies step into the powerBIAlerts output where aggressivedriving = 1 or enginetempanomaly = 1 or oilanomaly = 1 for reporting. The query also aggregates the average engine temperature and speed of all vehicles over the past two minutes, using TumblingWindow(Duration(minute, 2)), and outputs these fields to the synapse output.
+
+3. Select Save query in the top toolbar when you have finished updating the query.
+
+4. To start the query, select Overview within the Stream Analytics job blade's left-hand navigation menu. On top of the Overview blade, select Start.
+
+5. In the Start job blade that appears, select Now for the job output start time, then select Start. This will start the Stream Analytics job, so it will be ready to start processing and sending your events to Power BI later on.
+
+
+
+Exercise – Visualize results in Power BI
+-----------------------------------------
+In this exercise, you use Power BI  to create a report displaying captured vehicle anomaly data and pin it to a live dashboard for near-real-time updates. Power BI provides a platform for visualizing and analyzing aggregated data in a near-real-time analytics pipeline built on Azure Event Hubs, Azure Stream Analytics, and Power BI.
+
+1. Open a web browser, navigate to https://powerbi.microsoft.com/ , and select Sign in on the upper right.
+2. Enter your Power BI credentials you used when creating the Power BI output for Stream Analytics.
+
+3. After signing in, select My Workspace on the left-hand menu.
+
+4. Select the Datasets + dataflows tab on top of the workspace. Locate the dataset named ContosoAutoVehicleAnomalies, then select the Create Report action button to the right of the name. If you do not see the dataset, you may need to wait a few minutes and refresh the page.
+
+Note
+It can take several minutes for the dataset to appear. Periodically, you may need to refresh the page before you see the Datasets tab.
+
+5. You should see a new blank report for VehicleAnomalies with the field list on the far right.
+
+6. Select the Map visualization within the Visualizations section on the right.
+
+7.  Drag the city field to Location, and aggressivedriving to Size. Adding these values to the visualization places points of different sizes over cities on the map, depending on how many aggressive driving records there are.
+
+8. Your map should look similar to the following graphic:
+
+9. Select a blank area on the report to deselect the map. Now select the Treemap visualization.
+
+10. Drag the enginetemperature field to Values, then drag the transmission_gear_position field to Group. This will group the engine temperature values by the transmission gear position on the treemap so you can see which gears are associated with the hottest or coolest engine temperatures. The treemap sizes the groups according to the values, with the largest appearing on the upper left and the lowest on the lower right.
+
+11.  Select the down arrow next to the enginetemperature field under Values. Select Average from the menu to aggregate the values by average instead of the sum.
+
+12. Your treemap should look similar to the following graphic:
+
+13. Select a blank area on the report to deselect the treemap. Now select the Area chart visualization.
+
+14. Drag the region field to Legend, the speed field to Values, and the timestamp field to Axis. This will display an area chart with different colors indicating the region and the speed at which drivers travel over time within that region.
+
+15. Select the down arrow next to the speed field under Values. Select Average from the menu to aggregate the values by average instead of the sum.
+
+16. Your area chart should look similar to the following graphic:
+
+17. Select a blank area on the report to deselect the area chart. Now select the Multi-row card visualization.
+
+18.Drag the aggressivedriving field, enginetempanomaly, and oilanomaly fields to Fields.
+
+19. Select the Format tab in the multi-row card settings, then expand Data labels. Set the Text size to 30. Expand Category labels and set the Text size to 12.
+
+20.  Your multi-row card should look similar to the following graphic:
+
+21. Select Save on the upper right of the page.
+
+22. Enter a name, such as "Contoso Auto Vehicle Anomalies," then select Save.
+
+23. Now, let's add this report to a dashboard. Select Pin to a dashboard at the top of the report. You may have to select the ellipses (...) icon to see the option.
+
+24.Select New dashboard, then enter a name, such as "Contoso Auto Vehicle Anomalies Dashboard." Select Pin live. When prompted, select the option to view the dashboard. Otherwise, you can find the dashboard under My Workspace on the left-hand menu.
+
+25. The live dashboard will automatically refresh and update while data is being captured. You can hover over any point on a chart to view information about the item. Select one of the regions in the legend above the average speed chart. All other charts will filter by that region automatically. Select the region again to clear the filter.
+
+
+
+
+
+
+
 
 
