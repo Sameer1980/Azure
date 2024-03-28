@@ -1,6 +1,7 @@
 a)Databricks recommends using Auto Loader for incremental data ingestion. Auto Loader automatically detects and processes new files as they arrive in cloud object storage.
 
-b)Databricks recommends storing data with Delta Lake. Delta Lake is an open source storage layer that provides ACID transactions and enables the data lakehouse. Delta Lake is the default format for tables created in Databricks.
+b)Databricks recommends storing data with Delta Lake. Delta Lake is an open source storage layer that provides ACID transactions and enables the data lakehouse.
+Delta Lake is the default format for tables created in Databricks.
 
 c)To configure Auto Loader to ingest data to a Delta Lake table, copy and paste the following code into the empty cell in your notebook:
 
@@ -263,3 +264,89 @@ Run the pipeline
 Note: If your pipeline fails, your subscription may have insufficient quota in the region where your Azure Databricks workspace is provisioned to create a job cluster. See CPU core limit prevents cluster creation for details. If this happens, you can try deleting your workspace and creating a new one in a different region. You can specify a region as a parameter for the setup script like this: ./setup.ps1 eastus
 
 4)When the run succeeds, select its name to view the run details. Then, on the Process Data with Databricks page, in the Activity Runs section, select the Process Data activity and use its output icon to view the output JSON from the activity,
+
+
+Architecture of Azure Databricks Spark cluster
+---------------------------------------------------
+
+Azure Databricks service <-----------------------> Apache spark clusters
+
+1)From a high level the Azure Databrick service launches and manages Apache spark clusters within your Azure subscription.
+2)Apache spark clusters or groups of computers that are treated as a single computer and handle the execution of commands issued from notebooks.
+3)And using a master worker type architecture clusters allow processing of data to be parallelized across many computers in order to improve scale and performance.
+4)And Apache spark cluster consists of a spark driver which is known as the Master. 
+In Databricks the notebook interface is the driver program or Master. 
+It contains the main loop for the program and creates distributed datasets on the cluster.
+5)Databricks also consists of spark clusters or data sets also known as workers. 
+Databrick supplies operations in the form of transformations and actions to the clusters.
+6)  Typically this involves the driver node sending work or tasks to the worker nodes. 
+This assigns work to the slots, instructing them to pull data from a specified data source.
+7) Driver programs access Apache spark through a spark session object regardless of deployment location.
+ Microsoft Azure manages the cluster auto scaling it as needed based on both your usage and the setting used when configuring the cluster.
+8) Auto-termination can also be enabled. This allows Azure to terminate the cluster after a specified number of minutes of an activity. 
+9) When you create an Azure databricks, service, a databricks appliances deployed as an Azure resource in your subscription 
+and at the time of cluster creation you specify the types and sizes of the virtual machines, also known as VMS, to use for both the driver and worker nodes. 
+10) But as your Databricks manages all other aspects of the cluster, you also have the option of using a serverless pool.
+ A server less pool is a self managed pool of cloud resources that is auto-configured for interactive spark workloads. You provide the minimum and maximum number of workers and the worker type and as your Databricks then provision the compute and local storage based on your usage. 
+The Databricks appliance is deployed into Azure as a managed resource group within your subscription. 
+
+Summary
+---------------------------------------------------------------
+a) The Spark clusters, or datasets, are also known as workers.
+b) A task is sent from the driver node to the worker nodes.
+c)An Apache Spark cluster, the driver is the notebook interface. It contains the main loop for the program and creates distributed datasets on the cluster.
+------------------------------------------------------------------
+
+11)This resource group contains the driver and worker VMS along with other required resources, including a virtual network and security group and a storage account. 
+All metadata for your cluster, such as scheduled jobs is stored in an Azure database with Geo replication for fault tolerance.
+12) Internally Azure Kubernetes Service or AKS is used to run the Azure Databricks control plane and data planes via containers.
+13) These containers run on the latest generation of Azure hardware known as DV3VMs. 
+This hardware relies on non volatile memory express or NVMe(nonvolatile memory express-is a communication protocol that facilitates faster and more efficient data transfer between servers and storage systems. With NVMe, data can be transferred at the highest throughput and with the fastest response time.) SSDs capable of blazing 100 microseconds latency on I/O.
+ These make databricks, I/O performance even better.
+14) And accelerated networking provides the fastest virtualized network infrastructure in the cloud.
+15) Azure Databricks utilizes these features to further improve spark performance. 
+Once the services within this managed resource group already, you can then manage the Databricks cluster through the Azure databricks UI 
+and through features such as auto-scaling and auto-termination.
+
+16) Users can integrate Databricks with a range of Microsoft Azure services. 
+The control plane integrates with the Azure Resource Manager where you can access storage, compute network and Microsoft Databricks RP services.
+
+17)Users can also interact with databricks UX, which integrates with clusters and DBFS. 
+The clusters and DBFS provide access to the Databricks workspace and from here they integrate with Vinet and blob storage 
+and the Azure Resource Manager can also integrate with the Databricks workspace.
+
+Architecture of spark job
+-------------------------------
+i)Spark is a distributed computing environment . 
+ii)Distribution unit is Spark cluster.
+
+iii)Jobs are subdivided into tasks. The input to a job is partitioned into one or more partitions. These partitions are the unit of work for each slot.
+
+iv)At the time of cluster creation, you specify the types and sizes of the virtual machines (VMs) to use for both the Driver and Worker nodes,
+but Azure Databricks manages all other aspects of the cluster.
+
+v)Each parallelized action is referred to as a Job. The results of each Job is returned to the Driver.
+ Depending on the work required, multiple Jobs will be required. Each Job is broken down into Stages.
+vi) The second level of parallelization is the Slot - the number of which is determined by the number of cores and CPUs of each node.
+
+Summary
+---------------------------------------------------------------------------
+a)Azure Databricks Runtime adds several key capabilities to Apache Spark workloads 
+that can increase performance and reduce costs including High-speed connectors to Azure storage services.
+
+b)Azure Databricks Runtime adds several key capabilities to Apache Spark workloads that can increase performance and reduce costs including Caching.
+c)Detach your notebook from a cluster and attach it to another depending upon your organization's requirements.
+d) To use your notebook to run a code, you must attach it to a cluster.
+e) A Cluster has one and only one driver.
+f) The driver and the executors are Java processes.
+g) Scaling vertically is limited to a finite amount of RAM, Threads and CPU speeds.
+
+h)The first level of parallelization is the Executor - a Java virtual machine running on a node, typically, one instance per node.
+    The second level of parallelization is the Slot - the number of which is determined by the number of cores and CPUs of each node.
+
+i) Jobs are subdivided into tasks. The input to a job is partitioned into one or more partitions. These partitions are the unit of work for each slot.
+j) You can continually add nodes to the cluster.
+k) Each part of the cluster runs on its own individual node. 
+l)Azure Databricks, manages clusters through a high performing cluster manager. Developers just need to focus on the number of partitions, 
+slots, jobs and stages. 
+--------------------------------------------------------------------------------------
