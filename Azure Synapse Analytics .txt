@@ -1,0 +1,611 @@
+Azure Synapse Analytics is the latest enhancement of the Azure SQL Data Warehouse that promises to bridge the gap between data lakes and data warehouses.
+Azure Synapse Analytics is a scalable and cloud-based data warehousing solution from Microsoft. It is the next iteration of the Azure SQL data warehouse.
+
+It provides a unified environment by combining the data warehouse of SQL, the big data analytics capabilities of Spark, and data integration technologies to ease the movement of data between both, and from external data sources. We can ingest, prepare, manage, and serve data for immediate BI and machine learning needs easily with ASA.
+
+Azure Synapse Analytics Architecture
+--------------------------------------
+ASA architecture consists of four components:
+
+1.Synapse SQL: Complete T-SQL-based analytics
+Dedicated SQL pool (pay per DWU provisioned)
+Serverless SQL pool (pay per TB processed)
+
+2.Spark: Deeply integrated Apache Spark
+3.Synapse Pipelines: Hybrid data integration
+4.Studio: Unified user experience
+
+a)Synapse SQL: It is the ability to do T-SQL based analytics in Synapse workspace. It consists of two consumption models: dedicated and serverless.
+
+Dedicated SQL pools are used for dedicated models and a workspace can have any number of these pools.
+Serverless SQL pools are used for serverless models and every workspace has one of these pools.
+
+b)Apache Spark for Synapse: Serverless Apache Spark pools are created and used in the Synapse workspace to use Spark analytics. It consists of the following components:
+
+Apache Spark for Synapse
+Apache Spark pool
+Spark application
+Spark session
+Notebook
+Spark job definition
+
+c)Synapse Pipelines: It has the following features:
+
+Data Integration
+Data Flow
+Pipeline
+Activity
+Trigger
+Integration dataset
+
+
+d)Synapse Studio/Workspace: It is a securable collaboration boundary for doing cloud-based enterprise analytics in Azure and is deployed in a specific region and also has an associated ADLS Gen2 account and file system for temporary data storage.
+
+Features of Azure Synapse Analytics
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+1)Azure Synapse offers cloud data warehousing, dashboarding, and machine learning analytics in a single workspace.
+It ingests all types of data, including relational and non-relational data, and it lets you explore this data with SQL.
+Azure Synapse uses massively parallel processing or MPP database technology, which allows it to manage analytical workloads and also aggregate and process large volumes of data in an efficient manner.
+
+2)It gives you the ability to query massive data stores using either an on-demand serverless deployment (which scales automatically as needed to handle any processing or load) or provisioned resources.
+3)It is compatible with a wide range of scripting languages like Scala, Python, .Net, Java, R, SQL, T-SQL, and Spark SQL.
+4)It facilitates easy integration with Microsoft and Azure solutions like Azure Data Lake, Azure Blob Storage, and more.
+5)It includes the latest security and privacy technologies such as real-time data masking, dynamic data masking, always-on encryption, Azure Active Directory authentication, and more.
+
+Use-Cases Of Azure Synapse Analytics
+---------------------------------------
+Here is a list of some general-use cases scenarios of where Azure Synapse Analytics can be considered:
+
+a)Need for a managed service: It can serve as a managed cloud-based data warehouse instead of an on-site data warehouse that has to be maintained by you.
+b)Large data sets and complex queries: It uses an MPP architecture which is one of the best options for managing large datasets while running complicated read and data analytics operations.
+c)Data pipeline orchestration: It allows the orchestration of data pipelines in order to separate historical data from real-time operational databases.
+d)Managing structured and unstructured datasets.
+
+Frequently Asked Questions (FAQs)
+----------------------------------
+Q: Can Azure Synapse Analytics be utilized for machine learning?
+A: Indeed, ASA integrates with Azure Machine Learning, enabling the creation and deployment of machine learning models on extensive datasets. This synergy allows the utilization of both big data analytics and machine learning in tandem.
+
+Q: How does Azure Synapse Analytics support collaborative work and productivity?
+A: ASA fosters a collaborative environment through Azure Synapse Studio, providing a unified workspace for data engineers, data scientists, and analysts to collaborate. Additionally, it offers built-in tools and features for activities such as data exploration, visualization, and data preparation.
+
+Q: What security measures are available in Azure Synapse Analytics?
+A: ASA offers robust security features, encompassing encryption of data both at rest and in transit, integration with Azure Active Directory to facilitate authentication and authorization, role-based access control (RBAC) for meticulous access management, and integrated threat detection and monitoring capabilities.
+
+Q: Can Azure Synapse Analytics be employed for real-time analytics?
+A: Certainly, ASA supports real-time analytics by integrating with Azure Stream Analytics. This integration enables the ingestion and processing of streaming data in real-time, facilitating insights derived from live data sources.
+
+Q: How does Azure Synapse Analytics manage large-scale data processing?
+A: Azure Synapse Analytics harnesses the power of Apache Spark, a potent open-source big data processing engine. It allows for flexible scaling of data processing resources based on demand, enabling efficient handling of substantial data volumes.
+
+Q: What are the advantages of utilizing Azure Synapse Analytics?
+A: Azure Synapse Analytics offers several benefits, including the ability to process large-scale data and perform analytics efficiently, seamless integration with various Azure services, advanced security and governance features, and the capacity to handle both structured and unstructured data effectively. Please note that while efforts have been made to paraphrase the content and remove plagiarism, it's always a good practice to further review and revise the content to ensure its originality.
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+SQL Pool is the traditional Data Warehouse. It was formerly known as Azure SQL Data Warehouse before it came under the Synapse Family. 
+It is a Big Data Solution that stores data in a relational table format with columnar storage.
+
+a)Azure Synapse is a limitless analytics service that brings together enterprise data warehousing and Big Data analytics.
+b) For unplanned or ad-hoc workloads, use the always-available, serverless SQL endpoint(Azure Synapse serverless SQL pools).
+c) The Dedicated SQL pool is the best choice for predictable performance and cost such as when storing data in SQL tables.
+d) Azure Synapse Studio is the core tool that is used to administer and operate different features of Azure SQL Analytics.
+e) Predictive analytics helps answer questions about what will happen in the future.
+f) Descriptive analytics helps answer questions about what has happened based on historical data. Descriptive analytics techniques summarize large datasets.
+g) Predictive analytics can answer the question of “What is likely to happen in the future based on previous trends and patterns?”. 
+Analyzing past data patterns and trends by looking at historical data and customer insights can predict what might happen going forward and,
+in doing so, inform many aspects of a business. 
+h) You can use the Azure Synapse Studio to develop TSQL scripts and notebooks.
+i)Synapse notebooks supports four Apache Spark languages. PySpark (Python), Spark (Scala), SparkSQL, .NET for Apache Spark (C#).
+j) For predictable performance and cost, create dedicated SQL pools to reserve processing power for data stored in SQL tables.
+
+
+Create and manage Azure Synapse Analytics workspace.
+--------------------------------------------------------
+
+To create an Azure Synapse Analytics workspace, perform the following steps:
+
+1.  In the Azure portal, click on + Create a resource.
+
+2. In the text box, replace “Search the Marketplace” with the text “Azure Synapse” and then click on Azure Synapse Analytics.
+
+3. Click on Create.
+
+4. In Basics, enter your preferred Subscription, Resource group, Region, and then type in a workspace name.
+
+5. You need to select a Data Lake Storage Gen2 account and a container in that account to create a workspace. The simplest choice it to create a new one. By clicking on the Create new hyperlink, but there is the option to use an existing one by click on the drop-down list.
+
+6. Select Review + create > Create. Your workspace is ready in a few minutes.
+
+----------------------------------------------------------------------------------------
+
+a) All Spark pool data is stored in Azure Storage or Data Lake Storage.
+b) Synapse Analytics includes a custom notebook derived from Nteract.
+c) Spark instances also take approximately 5 minutes for more than 60 nodes.
+
+Create pools in Azure Synapse Analytics
+--------------------------------------------------------------------------------
+
+For Azure Synapse SQL pool
+1. Launch Azure Synapse Studio. The URL can be found in the Azure Synapse Workspace created in the Azure portal.
+2. In Azure Synapse Studio, navigate to the Management Hub in the left navigation by selecting the Manage icon.
+3. Once in the Management Hub, navigate to the SQL pools section to see the current list of SQL pools that are available in the workspace.
+4. Select + New command and the new SQL pool create wizard will appear.
+5. Enter the following details in the Basics tab:
+SQL pool name: SQLPool01
+Performance level: DW100c
+
+6. In the next tab, Additional settings, select none to provision the SQL pool without data. Leave the default collation as selected.
+7. We won't add any tags for now, so next select Review + create.
+
+8. In the Review + create tab, make sure that the details look correct based on what was previously entered, and press create.
+
+At this point, the resource provisioning flow will start. After the provisioning completes, navigating back to the workspace will show a new entry for the newly created SQL pool.
+
+9. Once the SQL pool is created, it will be available in the workspace for loading data, processing streams, reading from the lake, etc.
+
+Azure Synapse Spark pool
+1. Launch Azure Synapse Studio. The URL can be found in the Azure Synapse Workspace created in the Azure portal.
+2.In Azure Synapse Studio, navigate to the Management Hub in the left navigation by selecting the Manage icon.
+
+3. Once in the Management Hub, navigate to the Apache Spark pools section to see the current list of Apache Spark pools that are available in the workspace.
+4. Select + New and the new Apache Spark pool create wizard will appear.
+
+5. Enter the following details in the Basics tab:
+
+Apache Spark Pool name: Sparkpool01
+
+Node size: Small (4 vCPU / 32 GB)
+
+Autoscale: Disabled
+
+Number of Nodes: 8
+
+6. In the next tab (Additional settings), leave all settings as defaults.
+
+7. We won't add any tags for now, so select Review + create.
+
+8. In the Review + create tab, make sure that the details look correct based on what was previously entered, and press Create.
+9. The Apache Spark pool will start the provisioning process. Once the provisioning is complete, the new Apache Spark pool will appear in the list.
+
+Delete a pool
+1. Navigate to the pools in the Management Hub in Synapse Studio. In this case Apache Spark
+
+2. Select the ellipsis next to the Apache pool to be deleted (in this case, Sparkpool01) to show the commands for the Apache Spark pool.
+
+ 3. Press Delete.
+
+4. Confirm the deletion, and press Delete button.
+
+5. When the process completes successfully, the Apache Spark pool will no longer be listed in the workspace resources.
+
+6. Once completed, repeat steps 1- 5 in 'Delete a pool' to delete the Synapse SQL Pool.
+
+
+1)Data Lake Storage Gen2 makes Azure Storage the foundation for building enterprise data lakes on Azure. Designed from the start to service multiple petabytes of information while sustaining hundreds of gigabits of throughput.
+
+2) Azure Synapse Analytics enables you to create pools, either SQL pools, or Spark pools within the workspace that can be seamlessly mixed and matched based on your requirements. 
+
+It is able to do this through Azure Synapse Analytics shared metadata, which enables the different engines to share databases and tables.
+
+3. When creating a new Synapse Workspace, you can either create a new Data Lake Gen2 storage account or select from an existing account .
+
+4.A star schema is a database organizational structure optimized for use in a data warehouse or business intelligence that uses a single large fact table to store transactional or measured data, and one or more smaller dimensional tables that store attributes about the data.
+
+5.The dedicated model is referred to as dedicated SQL Pools. It refers to the data warehousing features that are generally available in Azure Synapse Analytics. Dedicated SQL pools represent a collection of analytic resources that are being provisioned when using Synapse SQL. 
+
+When you need predictable performance and cost, creating dedicated SQL pools to reserve processing power for data permanently stored in SQL tables in a data warehouse is the best approach to take.
+
+Visualize your analytics with Power BI
+----------------------------------------
+
+You can integrate your Azure Synapse Analytics workspace with a Power BI workspace so that you can get you data from within Azure Synapse Analytics visualized in a Power BI report or dashboard.
+
+1. You can perform this step by clicking on the visualize icon on the home page of Azure Synapse Studio.
+2. Which will bring up the Connect to Power BI screen.
+3. Here you can define a name and description for the Power BI Workspace. Then you would select the Tenant and Workspace name. Once you have connected to your workspace, you will be able to access the existing reports in the Power BI workspace in the Develop hub in Azure Synapse Studio.
+
+4. Expand Power BI, expand SynapseDemos, expand Power BI reports, then select 1-CDP Vision Demo (1). Select the arrows to collapse the **Visualizations pane (2) and the Fields pane (3) to increase the report size.
+
+5. As you can see, we can create, edit, and view Power BI reports from within Synapse Studio! As a data analyst, data engineer, or developer, you no longer need to open another browser window, sign in to Power BI, and toggle back and forth between environments.
+
+6. Select a Campaign Name and Region within the Decomposition Tree Analysis tab to explore the data. If you hover over an item, you will see a tool tip.
+
+7.Select the Campaign Analytics tab at the bottom of the report.
+
+8. The Campaign Analytics report combines data from the various data sources to create a compelling visualization of valuable data within an interactive interface.
+
+9. You can select various filters, campaigns, and chart values to filter the results. Select an item to for the second time to deselect it.
+
+10. Select Power BI datasets (1) in the left-hand menu, hover over the 2-Billion Rows Demo dataset and select the New Power BI report icon (2).
+
+11. Here is how we can create a brand new Power BI report from a dataset that is part of the linked Power BI workspace, from within Synapse Studio.
+
+12. Expand the Category table, then drag-and-drop the Category field on to the report canvas. This creates a new Table visualization that shows the categories.
+
+13. Select a blank area on the report canvas to deselect the table, then select the Pie chart visualization.
+
+14. Expand the ProdChamp table. Drag Campaign onto the Legend field, then drag ProductID onto the Values field. Resize the pie chart and hover over the pie slices to see the tool tips.
+
+15. We have very quickly created a new Power BI report, using data stored within our Synapse Analytics workspace, without ever leaving the studio.
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+a.Linked services are much like connection strings, which define the connection information needed to connect to external resources. For example to copy data from Blob storage to a SQL Database, you create two linked services: one for Azure Storage and one Azure SQL Database.
+
+b. Azure Synapse Analytics Studio Manage Hub allows you to manage your workspace within a single dashboard. 
+It has many options, from creating linked services using connectors such as Power BI and Azure Data Lake to creating SQL pools and Apache Spark pools.
+
+c. The Integrate hub is home to the data integration capabilities for Azure Synapse. You can create new data pipelines, use the Copy Data Tool to perform a one-time or scheduled data load from 100+ data sources.
+
+d.Hybrid Transactional and Analytical Processing enables businesses to perform analytics over a database system that is seen to provide transactional capabilities without impacting the performance of the system. 
+
+This enables organizations to use a database to fulfill both transactional and analytical needs to support near real-time analysis of operational data to make decisions about the information that is being analyzed.
+
+e.Azure Synapse Link for Azure Cosmos DB is a cloud-native hybrid transactional and analytical processing (HTAP) capability. 
+It enables you to run near real-time analytics over operational data in Azure Cosmos DB without impacting the performance of transactional workloads on Azure Cosmos DB.
+
+f. Azure Synapse Pipelines is based in the Azure Data Factory service.
+
+g. SQL and Spark can directly explore and analyze CSV files stored in the data lake.
+
+h. SQL and Spark can directly explore and analyze Parquet files stored in the data lake.
+
+i. SQL and Spark can directly explore and analyze JSON files stored in the data lake.
+
+j. When creating an Azure Data Lake Storage Gen2 name, the storage account name must be unique across all existing storage account names in Azure.
+
+k. Data in a data warehouse is stored in permanent tables that are populated using an extract, transform, and load (ETL) process by services such as Azure Synapse pipelines, or Azure Data Factory. 
+As a result, you need to understand the data that is stored in the sources systems and how it should arrive within the data warehouse. This in turn dictates how you should cleanse or transform the data.
+
+l. In a Spark Pool cluster the Driver node sends work to the Worker nodes and instructs them to pull data from a specified data source.
+
+m. You can create a new Spark pool in Azure Synapse using Azure PowerShell.
+n. You can create a new Spark pool in Azure Synapse using the Synapse Analytics .Net SDK.
+o. You can create a new Spark pool in Azure Synapse using the Azure Portal.
+p.The Azure synapse shared metadata allows the different engines to share the databases and tables between Spark pools and SQL on-demand engine.
+q. Azure Synapse Link is the component that enables Hybrid Transactional and Analytical Processing.
+r. You can develop TSQL scripts and notebooks within Azure Synapse Studio.
+
+SUMMARY
+-----------------
+
+1.An Azure Synapse Analytics workspace is one in which you can deploy Azure Synapse Analytics in order to create SQL or Spark pools. A data warehouse is a core component of business intelligence or BI solutions. The data warehouse provides a central repository of data stored in relation of tables.
+It facilitates solutions around descriptive analytics. The key points to bear in mind when dealing with data at a data warehouse are as follows. Data warehouse extracts, cleans and transforms data. It stores data in permanent tables using an extract, transform and load, or ETL process.
+
+Finally, data virtualization facilitates interaction with the data in the data warehouse without the need to understand its technical specifications. 
+Azure Synapse SQL offers both a dedicated and serverless model to assist with data virtualization. The dedicated model is referred to as Dedicated SQL pools.These are a collection of analytic resources best used when you need predictable performance and cost. 
+
+2.The serverless model is ideal for unplanned or ad hoc workloads that the diagnostic analytics approach would generate. It works best when performing data exploration or preparing data for data virtualization.
+
+3.Apache Spark is an open-source distribution system that is used for processing big data workloads more effectively within Azure Synapse Analytics via Spark pools. There are several key benefits to creating a Spark pool in Azure Synapse Analytics: speed and efficiency, ease of creation, ease of use, and scalability. Other benefits to Spark include the following; Spark pools and Azure Synapse can use Azure Data Lake Storage Generation 2, as well as Blob Storage. If you have a Spark implementation in place already, then Azure Synapse Analytics can also integrate with other Spark implementations such as Azure Databricks. Finally, Spark pools in Azure Synapse Analytics come with Anaconda libraries pre-installed. Azure Synapse Pipelines is the Cloud-based ETL and data integration service that allows you to create data-driven workflows for orchestrating data movement and transforming data at scale. 
+
+4.You can create and schedule data-driven workflows called pipelines, that can ingest data from disparate data stores. Data can then be transformed via ETL, or ELT, or Azure Compute Services. Data Factory supports a wide variety of data sources. A linked service can be used to connect these data sources, ingest data, and fire up Compute services. Finally, a data sets object identifies datasets or data structures for Azure Data Factory that are referenced by the linked service object. Datasets can also be used by an ADF object known as an activity. Activities can include the copy activity that can be used to ingest data from a variety of data sources, mapping dataflow to perform code free data transformations, the execution of a stored procedure, hive query or pig script to transform the data, and pushing data into a machine learning model to perform analysis. 
+
+5.You can integrate your Azure Synapse Analytics workspace with a Power BI workspace so that you can obtain data from within Azure Synapse Analytics visualized in a Power BI report or dashboard. Hybrid transactional and analytical processing enables businesses to perform analytics over a database system that is seen to provide transactional capabilities without impacting the performance of the system. This enables organizations to use a database to fulfill both transactional and analytical needs to support near real-time analysis of operational data to make decisions about the information that is being analyzed.
+
+6.A.Data Hub
+----------------
+In the data hub you can access SQL resources, external data sources, and preview data tables and data files.
+The data hub provides you with the ability to interact and explore with source data, and linked services as shown in the following steps.
+1. On the left-hand side of Azure Synapse Studio, click the Data hub.
+The Data hub is where you access your provisioned SQL pool databases and SQL serverless databases in your workspace, as well as external data sources, such as storage accounts and other linked services.
+
+2. Under the Workspace (2) tab of the Data hub (1), expand the SQLPool01 (3) SQL pool underneath Databases.
+3. Expand Tables and Programmability/Stored procedures.
+
+The tables listed under the SQL pool store data from multiple sources, such as SAP Hana, Twitter, Azure SQL Database, and external files copied over from an orchestration pipeline. Synapse Analytics gives us the ability to combine these data sources for analytics and reporting, all in one location.
+
+You will also see familiar database components, such as stored procedures. You can execute the stored procedures using T-SQL scripts, or execute them as part of an orchestration pipeline.
+
+4. Select the Linked tab, expand the Azure Data Lake Storage Gen2 group, then expand the primary storage for the workspace.
+Every Synapse workspace has a primary ADLS Gen2 account associated with it. This serves as the data lake, which is a great place to store flat files, such as files copied over from on-premises data stores, exported data or data copied directly from external services and applications, telemetry data, etc. Everything is in one place.
+
+In our example, we have several containers that hold files and folders that we can explore and use from within our workspace. Here you can see marketing campaign data, CSV files, finance information imported from an external database, machine learning assets, IoT device telemetry, SAP Hana data, and tweets, just to name a few.
+
+Now that we have all this data in once place, we can start previewing some of it right here, right now.
+
+Let's look at Campaign data.
+
+5. Select the customcsv storage container.
+Let’s preview Campaign data to understand new campaign names.
+
+6. Right-click on the CampaignAnalyticsLatest.csv file (1), then select Preview (2).
+
+The file explorer capabilities allow you to quickly find files and perform actions on them, like preview file contents, generate new SQL scripts or notebooks to access the file, create a new data flow or dataset, and manage the file.
+
+B.Develop Hub
+---------------
+The Develop hub is where you manage SQL scripts, Synapse notebooks, data flows, and Power BI reports.
+
+1. Select the Develop hub.
+The Develop hub is where you manage SQL scripts, Synapse notebooks, data flows, and Power BI reports.
+
+2. Expand each of the groups under the Develop menu.
+
+The Develop hub in our sample environment contains examples of the following artifacts:
+
+SQL scripts contains T-SQL scripts that you publish to your workspace. Within the scripts, you can execute commands against any of the provisioned SQL pools or on-demand SQL serverless pools to which you have access.
+
+Notebooks contains Synapse Spark notebooks used for data engineering and data science tasks. When you execute a notebook, you select a Spark pool as its compute target.
+
+Data flows are powerful data transformation workflows that use the power of Apache Spark but are authored using a code-free GUI.
+
+Power BI reports can be embedded here, giving you access to the advanced visualizations they provide without ever leaving the Synapse workspace.
+
+C.Integrate Hub
+----------------
+Manage data integration pipelines within the Integrate hub.
+
+1. Select the Integrate hub.Manage integration pipelines within the Integrate hub. If you are familiar with Azure Data Factory, then you will feel at home in this hub. The pipeline creation experience is the same as in ADF, which gives you another powerful integration built into Synapse Analytics, removing the need to use Azure Data Factory for data movement and transformation pipelines.
+
+2. Expand Pipelines and select 1 Master Pipeline (1). Point out the Activities (2) that can be added to the pipeline, and show the pipeline canvas (3) on the right.
+This Synapse workspace contains 16 pipelines that enable us to orchestrate data movement and transformation steps over data from several sources.
+
+The Activities list contains many activities that you can drag and drop onto the pipeline canvas on the right.
+
+Expand a few activity categories to show what's available, such as Notebook, Spark, and SQL pool stored procedure activities under Synapse.
+
+D.Monitor hub
+-------------
+Use the Monitor hub to view pipeline and trigger runs, view the status of the various integration runtimes that are running, view Apache Spark jobs, SQL requests, and data flow debug activities.
+
+1. Select the Monitor hub.
+The Monitor hub is your first stop for debugging issues and gaining insight on resource usage. You can see a history of all the activities taking place in the workspace and which ones are active now.
+
+2. Show each of the monitoring categories grouped under Integration and Activities.
+
+-->Pipeline runs shows all pipeline run activities. You can view the run details, including inputs and outputs for the activities, and any error messages that occurred. You can also come here to stop a pipeline, if needed.
+
+-->Trigger runs shows you all pipeline runs caused by automated triggers. You can create triggers that run on a recurring schedule or tumbling window. You can also create event-based triggers that execute a pipeline any time a blob is created or deleted in a storage container.
+
+-->Integration runtimes shows the status of all self-hosted and Azure integration runtimes.
+
+-->Apache Spark applications shows all the Spark applications that are running or have run in your workspace.
+
+-->SQL requests shows all SQL scripts executed either directly by you or another user, or executed in other ways, like from a pipeline run.
+
+-->Data flow debug shows active and previous debug sessions. When you author a data flow, you can enable the debugger and execute the data flow without needing to add it to a pipeline and trigger an execute. Using the debugger speeds up and simplifies the development process. Since the debugger requires an active Spark cluster, it can take a few minutes after you enable the debugger before you can use it.
+
+3. Select SQL requests (1), then switch to the SQLPool01 (2) pool to see the list of SQL requests.
+4. Hover over a SQL request, then select the Request content icon to view the SQL request that was sent to the SQL pool. You may need to try a few before you find one with interesting content.
+5. You can view more details.
+
+E.Manage hub
+-----------
+The Manage hub enables you to perform some of the same actions we saw in the Azure portal, such as managing SQL and Spark pools. However, there is a lot more you can do in this hub that you cannot do anywhere else, such as managing Linked Services and integration runtimes, and creating pipeline triggers.
+
+1. Select the Manage hub.
+2. Show each of the management categories grouped under Analytics pools, External connections, Integration, and Security.
+-->SQL pools. Lists the provisioned SQL pools and on-demand SQL serverless pools for the workspace. You can add new pools or hover over a SQL pool to pause or scale it. You should pause a SQL pool when it's not being used to save costs.
+
+-->Apache Spark pools. Lets you manage your Spark pools by configuring the auto-pause and auto-scale settings. You can provision a new Apache Spark pool from this blade.
+
+-->Linked services. Enables you to manage connections to external resources. Here you can see linked services for our data lake storage account, Azure Key Vault, Power BI, and Synapse Analytics. Task: Select + New to show how many types of linked services you can add.
+
+-->Azure Purview (Preview). Provides integration with Azure Purview to provide data governance and lineage within Azure Synapse Analytics.
+
+--> Triggers. Provides you a central location to create or remove pipeline triggers. Alternatively, you can add triggers from the pipeline.
+
+-->Integration runtimes. Lists the IR for the workspace, which serves as the compute infrastructure for data integration capabilities, like those provided by pipelines. Task: Hover over the integration runtimes to show the monitoring, code, and delete (if applicable) links. Click on a code link to show how you can modify the parameters in JSON format, including the TTL (time to live) setting for the IR.
+
+-->Access control. This is where you go to add and remove users to one of three security groups: workspace admin, SQL admin, and Apache Spark for Azure Synapse Analytics admin.
+
+-->Credentials. Contains objects that hold authentication information that can be used by Azure Synapse Analytics.
+
+-->Managed private endpoints. This is where you manage private endpoints, which use a private IP address from within a virtual network to connect to an Azure service or your own private link service. Connections using private endpoints listed here provide access to Synapse workspace endpoints (SQL, SqlOndemand and Dev).
+
+-->Workspace packages. Workspace packages can be custom code or a specific version of an open-source library that you would like to use in your Apache Spark pools held in the Azure Synapse Analytics Workspace.
+
+-->Git configuration. Enables you to connect your workspace to a Git repository to enable source control.
+
+
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+7.Data Factory empowers customers to do code-free ETL/ELT, including preparation and transformation.
+
+8.When you execute a notebook, you select a Spark pool as its compute target.
+
+9.Data flows are powerful data transformation workflows that use the power of Apache Spark but are authored using a code-free GUI. 
+Data flows are visually designed data transformations in Azure Synapse Analytics. 
+Data flows allow data engineers to develop data transformation logic without writing code.
+
+10. The Develop hub is where you manage SQL scripts, Synapse notebooks, data flows, and Power BI reports.
+11. The linked tab of the data hub is where you can view the contents of the primary data lake store.
+12. You can grant access to Synapse workspace in the Manage hub.
+13. Azure Synapse Analytics implements a data warehouse during the model and serve stage using a SQL pool and MPP engine.
+14.Power BI enables customers to build visualizations on massive amounts of data and ensures that data insights are available to everyone across their organization. 
+15.Power BI supports an enormous set of data sources, which can be queried live, or be used to model and ingest for detailed analysis and visualization. 
+16. JSON format is natively supported by Synapse Analytics.
+17. Parquet format is natively supported by Synapse Analytics.
+18.CSV Format is natively supported by Synapse Analytics.
+19.ORC format is natively supported by Synapse Analytics.
+20.In your data pipeline, you can collect messages from these services, and process them using Azure Stream Analytics.
+21.In your data pipeline, you can collect messages from these services, and process them using Azure Databricks.
+22. Apache Spark is a parallel processing framework that supports in-memory processing to boost the performance of big-data analytic applications.
+Spark pools in Azure Synapse are compatible with Azure Storage and Azure Data Lake Generation 2 Storage. So you can use Spark pools to process your data stored in Azure.
+
+23.In your data pipeline, you can collect messages from these services, and process them using Azure Functions.
+24.In your data pipeline, you can collect messages from these services, and process them using Azure Stream Analytics.
+25.In your data pipeline, you can collect messages from these services, and process them using Azure Databricks.
+
+Identify modern data warehouse architecture components
+------------------------------------------------------------
+
+There is more to a data warehouse than simply storing business data. Data grows at an exponential rate, year over year. Not just the volume of data, but the variety of data, from structured, to semi-structured, and to a greater degree, unstructured that must be managed. The velocity and variety of data leads to data engineering challenges when it comes to ingesting, transforming, and preparing the data for machine learning, reporting, and other purposes.
+
+The modern data warehouse serves to address these challenges. A good data warehouse adds value, such as acting as a central location for all your data, scale with the data as it grows over time, and providing familiar tools and ecosystem for your data engineers, data analysts, data scientists, and developers.
+
+Let's look at each of these elements in detail.
+
+One place for all your data
+With a modern data warehouse, we have one hub for all data when using Synapse Analytics.
+
+Synapse Analytics enables you to ingest data from multiple data sources through its orchestration pipelines.
+
+1. Select the Integrate hub.
+Manage integration pipelines within the Integrate hub. If you are familiar with Azure Data Factory (ADF), then you will feel at home in this hub. The pipeline creation experience is the same as in ADF, which gives you another powerful integration built into Azure Synapse Analytics, removing the need to use Azure Data Factory for data movement and transformation pipelines.
+
+2. Expand Pipelines and select Customize EMail Analytics (1). Select the Copy data activity on the canvas (2), select the Source tab (3), then select Preview data (4).
+
+3.Close the preview, then select Open next to the CustomEmailAnalytics source dataset.
+
+4. Show the Linked service associated with the dataset's connection, as well as the CSV file path (1). Close (2) the dataset to return to the pipeline.
+
+5. On the pipeline, select the Sink tab (1). The bulk insert copy method is selected and there is a pre-copy script that truncates the EmailAnalytics table, which runs prior to copying the data from the CSV source (2). Select Open next to the EmailAnalytics sink dataset (3).
+
+6. The Linked service is the Azure Synapse Analytics SQL pool, and the Table is EmailAnalytics (1). The Copy data activity in the pipeline uses the connection details in this dataset to copy data from the CSV data source into the SQL pool. Select Preview data (2).
+We can see that the table already contains data, which means that we have successfully run the pipeline in the past.
+
+7. Close the EmailAnalytics dataset.
+
+8.Select the Mapping tab. This is where you configure the mapping between the source and sink datasets. The Import schemas button attempts to infer the schema for your datasets if they are based on unstructured or semi-structured data sources, like CSV or JSON files. It also reads the schema from structured data sources, like Synapse Analytics SQL pools. You also have the option to manually create your schema mapping by clicking on + New mapping or by modifying the data types.
+9. Select the MarketingDBMigration (1) pipeline. Direct your attention to the pipeline's canvas (2).
+This pipeline is responsible for copying data from a Teradata database. The first activity is a lookup (2) to make sure that the source data exists. If data exists, it flows to the copy data activity (3) to move the source data into the data lake (ADLS Gen2 primary data source). The next step is a Notebook activity (4), which uses Apache Spark within a Synapse Notebook to perform data engineering tasks. The last step is another copy data activity (5) that loads the prepared data and stores it into an Azure Synapse SQL pool table.
+
+This workflow is common when conducting data movement orchestration. Synapse Analytics pipelines makes it easy to define data movement and transformation steps, and encapsulates these steps into a repeatable process that you can maintain and monitor within your modern data warehouse.
+
+10. Select the SalesDBMigration (1) pipeline. Direct your attention to the pipeline's canvas (2).
+
+Here is another example of a data movement orchestration pipeline that helps us combine external data sources into our warehouse. In this case, we load data from an Oracle sales database into an Azure Synapse SQL pool table.
+
+11. Select the SAP HANA TO ADLS pipeline. This pipeline copies data from a financial SAP HANA data source into the SQL pool.
+
+12. Select the + button at the top of the Orchestrate blade, then select Pipeline to create a new pipeline.
+
+When the new pipeline opens, the Properties blade appears (1), allowing you to name the pipeline (2).
+
+13. Expand the Move & transform activity group, then drag the Copy data activity onto the design canvas (1). With the Copy data activity selected, select the Source tab (2), then select + New (3) next to the source dataset.
+
+14. Scroll through the list of dataset sources to show the large number of data connections at your disposal, and then click Cancel.
+
+Unlimited data scale
+1. Select the Manage hub.
+2. Select SQL pools (1). Hover over SQLPool01 and select the Scale button (2).
+3. Drag the Performance level slider right and left.
+You can scale out or back compute by adjusting the number of Data Warehouse Units (DWUs) assigned to your SQL pool. This adjusts the loading and query performance linearly as you add more units.
+
+To perform a scale operation, SQL pool first kills all incoming queries and then rolls back transactions to ensure a consistent state. Scaling only occurs once the transaction rollback is complete.
+
+You can scale SQL compute at any time by using this slider. You can also programmatically adjust the Data Warehouse Units, enabling scenarios where you automatically scale your pool based on a schedule or other factors.
+
+4. Cancel the Scale dialog, then select Apache Spark pools (1) in the Manage hub left-hand menu. Hover over SparkPool01 and select the auto-scale settings button (2).
+5. Drag the Number of nodes slider right and left.
+
+You can configure the Apache Spark pool to have a fixed size by disabling the autoscale setting. Here we have enabled autoscale and set the minimum and maximum number of nodes to control the amount of scale applied. When you enable autoscale, Synapse Analytics monitors the resource requirements of the load and scales the number of nodes up or down. It does this by continuously monitoring pending CPU, pending memory, free CPU, free memory, and used memory per node metrics. It checks these metrics every 30 seconds and makes scaling decisions based on the values.
+
+It can take 1-5 minutes for a scaling operation to complete.
+
+6. Cancel the auto-scale dialog, then select Linked services (1) in the Manage hub left-hand menu. Make note of the WorkspaceDefaultStorage ADLS Gen2 storage account (2).
+
+When you provision a new Azure Synapse Analytics workspace, you define the default storage Azure Data Lake Storage Gen2 account. Data Lake Storage Gen2 makes Azure Storage the foundation for building enterprise data lakes on Azure. Designed from the start to service multiple petabytes of information while sustaining hundreds of gigabits of throughput, Data Lake Storage Gen2 allows you to easily manage massive amounts of data.
+
+Its hierarchical namespace organizes files into a hierarchy of directories for efficient access and more granular security, down to the file-level.
+
+ADLS Gen2 provides virtually limitless scale for your data lake. You can attach additional ADLS Gen2 accounts for greater scale and flexibility as needed.
+
+Familiar tools and ecosystem
+1. Select the Develop hub.
+2. Expand SQL scripts and select 1 SQL Query With Synapse (1). Make sure you are connected to SQLPool01 (2). Highlight (3) the first line of the script and execute. Observe that the number of records in the Sales table is 3,443,486 (4).
+If we execute the first line in this SQL script, we can see that we have almost 3.5 million rows contained within.
+
+3. Highlight the rest of the script (lines 8 - 18) and execute.
+One of the benefits of using a modern data warehouse like Synapse Analytics is that you can combine all your data in one place. The script we just executed joins data from a sales database, product catalog, millennial customers extracted from demographics data, and twitter.
+
+4. Select the 2 JSON Extractor (1) script and make sure you're still connected to SQLPool01. Highlight the first select statement (2) (line 3). Observe that the data stored in the TwitterData column (3) is in JSON format.
+Azure Synapse enables you to store JSON in standard textual format. Use standard SQL language for querying JSON data.
+
+5. Highlight the next SQL statement (lines 8 - 15) and execute.
+We can use JSON functions, such as JSON_VALUE and ISJSON to extract the JSON data and extract it to specific structured columns.
+6. Highlight the next SQL statement (lines 21 - 29) and execute.
+We want to filter for the #sunglassess hashtag. This query fetches and extracts the JSON data into structured columns, then filters on the derived Hashtag column.
+
+The last script does the same thing, but just using a subquery format.
+
+7. Select the 8 External Data To Synapse Via Copy Into (1) script. DO NOT EXECUTE. Scroll through the script file, using the commentary below to explain what it does.
+In this script, we create a table to store Twitter data stored in Parquet files. We use the COPY command to quickly and efficiently load all data stored in Parquet files into the new table.
+
+Finally, we select the first 10 rows to verify the data load.
+
+The COPY command and PolyBase can be used to import data from various formats into the SQL pool, either through T-SQL scripts like we see here, or from orchestration pipelines.
+
+8. Select the Data hub.
+
+9. Select the Linked tab (1), expand the Azure Data Lake Storage Gen2 group, expand the Primary storage account, then select the twitterdata container (2). Right-click on the dbo.TwitterAnalytics.parquet file (3), then select New notebook (4).
+
+Synapse Studio provides several options to work with files stored in attached storage accounts, such as creating a new SQL script, a notebook, data flow, or new dataset.
+
+Synapse Notebooks enable you to harness the power of Apache Spark to explore and analyze data, conduct data engineering tasks, and do data science. Authentication and authorization with linked services, such as the primary data lake storage account, are fully integrated, allowing you to immediately start working with files without dealing with account credentials.
+
+Here we see a new notebook that loads a Spark DataFrame (1) with the Parquet file that we right-clicked on in the Data hub. We can immediately start exploring the file contents in just a couple simple steps. At the top of the notebook, we see that it is attached to SparkPool01, our Spark pool, and the notebook language is set to Python (2).
+
+Do not execute the notebook unless the Spark pool is ready (3). It can take up to 5 minutes to start the pool if it is idle. Alternatively, you can execute the notebook, then come back to it later to view the results.
+
+Design ingestion patterns for a modern data warehouse
+----------------------------------------------------------
+
+Data Ingestion can occur in several different ways. The primary component of Azure Synapse Analytics to ingest data is to use the Copy Data activity within Azure Synapse Pipelines. This type of activity is usual held within an Execute Pipeline activity with other features such as a lookup operation, or a split data activity.
+
+Alternatively, you can create a connection within a Data Flow that points to a source database that used is the starting point for ingesting data and using the data within additional transformation activities.
+
+The following shows an example of both.
+
+Data ingest
+1. Select the Integrate hub.
+2. Expand Pipelines and select 1 Master Pipeline (1). Point out the Activities (2) that can be added to the pipeline, and show the pipeline canvas (3) on the right.
+Our Synapse workspace contains 16 pipelines that enable us to orchestrate data movement and transformation steps over data from several sources.
+The Activities list contains a large number of activities that you can drag and drop onto the pipeline canvas on the right.
+3. Select the Execute Customize All Pipeline activity (1). Select the Settings (2) tab. Show that the invoked pipeline is Customize All (3), then select Open (4).
+As you can see, there are five child pipelines. This first execute pipeline activity cleans and ingests new Manufacturer campaign data for the Campaign Analytics report.
+
+4. Select the Campaign Analytics activity (1), select the Settings tab (2), observe the invoked pipeline is set to Customize All (3), then select Open (4).
+
+5. Observe how cleaning and ingesting happens in the pipeline by clicking on each activity.
+
+6. Select the Develop hub.y
+
+7. Expand Data flows, then select the ingest_data_from_sap_hana_to_azure_synapse data flow.
+As stated earlier, data flows are powerful data transformation workflows that use the power of Apache Spark, but are authored using a code-free GUI. The work you do in the UI gets transformed into code executed by a managed Spark cluster, automatically, without having to write any code or manage the cluster.
+
+The data flow performs the following functions:
+
+Extracts data from the SAP HANA data source (Select DatafromSAPHANA step).
+
+Retrieves only those rows for an upsert activity, where the ShipDate value is greater than 2014-01-01 (Select Last5YearsData step).
+
+Performs data type transformations on the source columns, using a Derived Column activity (Select the top DerivedColumn activity).
+
+In the top path of the data flow, we select all columns, then load the data into the AggregatedSales_SAPHANANew Synapse pool table (Select the Selectallcolumns activity and the LoadtoAzureSynapse activity).
+
+In the bottom path of the data flow, we select a subset of the columns (Select the SelectRequiredColumns activity).
+
+Then we group by four of the columns (Select the TotalSalesByYearMonthDay activity) and create sum and average aggregates on the SalesAmount column (Select the Aggregates option).
+
+Finally, the aggregated data is loaded into the AggregatedSales_SAPHANA Synapse pool table (Select the LoadtoSynapse activity).
+
+------------------------------------------------------------------------------------------------------------------------------------------
+
+a.You can natively perform data transformations with Azure Data Factory code free using the Mapping Data Flow task.
+b.A Conditional Split transformation routes data rows to different streams based on matching conditions. 
+The conditional split transformation is similar to a CASE decision structure in a programming language.
+c.A Sink transformation allows you to choose a dataset definition for the destination output data. You can have as many sink transformations as your data flow requires.
+d. The file size, number of files, and folder structure in Data Lake Storage Gen2 can have an impact on performance. 
+If you store your data as many small files, this can negatively affect performance. In general, organize your data into larger-sized files for better performance.
+e.If you store your data as many small files, this can negatively affect performance. In general, organize your data into larger-sized files for better performance (256 MB to 100 GB in size).
+f.When building data flows in Azure Synapse you can enable debug mode, Enabling Debug mode turns on a small interactive Spark cluster.
+g.Azure Synapse is a limitless analytics service that brings together enterprise data warehousing and Big Data analytics.
+h.Azure Synapse Studio is where you can develop TSQL scripts and notebooks.
+i.A star schema is a database organizational structure optimized for use in a data warehouse or business intelligence that uses a single large fact table to store transactional or measured data, and one or more smaller dimensional tables that store attributes about the data.
+
+j.A Spark pool cluster consists of a single Spark Driver.A Spark pool cluster consists of multiple Worker nodes.
+k.The Develop Hub in Azure Synapse Analytics enables you to write code and define business logic using a combination of notebooks, SQL scripts, and data flows. It also provides access to the Power BI reports node.
+l. Hybrid Transactional and Analytical Processing enables businesses to perform analytics over a database system that is seen to provide transactional capabilities without impacting the performance of the system. 
+
+This enables organizations to use a database to fulfill both transactional and analytical needs to support near real-time analysis of operational data to make decisions about the information that is being analyzed.
+
+m.Use the Monitor hub to view pipelines and trigger runs, the status of the various integration runtimes that are running, Apache Spark jobs, SQL requests, and data flow debug activities. If you want to see the status of a job or activity, this is where to go.
+n.Data Factory empowers customers to do code-free ETL or ELT, including preparation and transformation.
