@@ -1,0 +1,13 @@
+1) Linked Service name and credentials - username , password and server address.
+
+2) Are there any OPENROWSET function to ADLS? What's the name and location of the file and what are queries to query that file?
+
+3) In Azure Synapse Analytics how to examine and download the Event Log for a particular application or Spark Notebook run?
+
+4) What is the process of transferring data from on-site server to Azure cloud ?
+
+5) How to ensure that team's self hosted IR for transferring of data from on-premise to cloud is only accesible to specified team members?
+6) How to  create a pipeline in the Azure Synapse Analytics workspace? How to add activity for the SQL Stored procedure to this pipeline?
+   Name and scheduled run details of any tigger  that will run the pipeline.
+
+7)Where can I see the history log  for every query run in the Azure Synapse Analytics workspace?
