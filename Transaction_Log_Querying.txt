@@ -1,0 +1,25 @@
+USE AdventureWorks2022
+SELECT * FROM fn_dblog(NULL, NULL);
+
+SELECT name, physical_name
+FROM sys.database_files
+WHERE type_desc = 'LOG';
+
+SELECT * FROM fn_dblog(NULL, NULL)
+WHERE Operation IN ('LOP_INSERT_ROWS', 'LOP_MODIFY_ROW','LOP_DELETE_ROWS');
+
+USE dbtest01
+select * from sys.tables
+
+SELECT id, name FROM sys.sysobjects WHERE NAME = 'article3';
+
+SELECT * FROM fn_dblog(NULL,NULL) WHERE [Lock Information] LIKE '%1237579447%'
+
+SELECT [begin time], 
+       [rowlog contents 1], 
+       [Transaction Name], 
+       Operation
+  FROM sys.fn_dblog
+   (NULL, NULL)
+  WHERE operation IN
+   ('LOP_INSERT_ROWS', 'LOP_MODIFY_ROW','LOP_DELETE_ROWS');
