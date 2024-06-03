@@ -1,0 +1,157 @@
+Deploy an Azure Databricks workspace
+1. Click the following button to open the Azure Resource Manager Template (ARM) template in the Azure portal. 
+Deploy Databricks from the ARM Template
+
+2. Provide the required values to create your Azure Databricks workspace:
+
+Subscription: Choose the Azure Subscription in which to deploy the workspace.
+
+Resource Group: Leave at Create new and provide a name for the new resource group.
+
+Location: Select a location near you for deployment. For the list of regions supported by Azure Databricks, see 
+Azure services available by region
+.
+
+Workspace Name: Provide a name for your workspace.
+
+Pricing Tier: Ensure premium is selected.
+
+3. Accept the terms and conditions.
+
+4. Select Purchase.
+
+5. The workspace creation takes a few minutes. During workspace creation, the portal displays the Submitting deployment for Azure Databricks tile on the right side. You may need to scroll right on your dashboard to see the tile. There is also a progress bar displayed near the top of the screen. You can watch either area for progress.
+
+Create a cluster
+------------------------------
+1. When your Azure Databricks workspace creation is complete, select the link to go to the resource.
+
+2. Select Launch Workspace to open your Databricks workspace in a new tab.
+
+3. In the left-hand menu of your Databricks workspace, select Clusters.
+
+4. Select Create Cluster to add a new cluster.
+
+ Enter a name for your cluster. Use your name or initials to easily differentiate your cluster from your coworkers.
+
+6. Select the Cluster Mode: Single Node.
+
+7. Select the Databricks RuntimeVersion: Runtime: 7.3 LTS (Scala 2.12, Spark 3.0.1).
+
+8. Under Autopilot Options, leave the box checked and in the text box enter 45.
+
+9. Select the Node Type: Standard_DS3_v2.
+
+10. Select Create Cluster.
+
+Clone the Databricks archive
+-----------------------------------------
+1. If you do not currently have your Azure Databricks workspace open: in the Azure portal, navigate to your deployed Azure Databricks workspace and select Launch Workspace.
+
+2. In the left pane, select Workspace > Users, and select your username (the entry with the house icon).
+
+3. In the pane that appears, select the arrow next to your name, and select Import.
+4.In the Import Notebooks dialog box, select the URL and paste in the following URL:
+https://github.com/solliancenet/microsoft-learning-paths-databricks-notebooks/blob/master/data-engineering/DBC/03-Reading-and-writing-data-in-Azure-Databricks.dbc?raw=true
+
+ 5.Select Import.
+
+6. Select the 03-Reading-and-writing-data-in-Azure-Databricks folder that appears.
+
+Complete the following notebook
+-------------------------------------------
+Open the 1.Reading Data - CSV notebook. Make sure you attach your cluster to the notebook before following the instructions and running the cells within.
+
+Within the notebook, you will:
+
+Start working with the API documentation
+
+Introduce the class SparkSession and other entry points
+
+Introduce the class DataFrameReader
+
+Read data from:
+CSV without a Schema
+CSV with a Schema
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+PySpark is the Python API for Apache Spark. It enables you to perform real-time, large-scale data processing in a distributed environment using Python. It also provides a PySpark shell for interactively analyzing your data.
+
+PySpark combines Python’s learnability and ease of use with the power of Apache Spark to enable processing and analysis of data at any size for everyone familiar with Python.
+
+PySpark supports all of Spark’s features such as Spark SQL, DataFrames, Structured Streaming, Machine Learning (MLlib) and Spark Core.
+
+Spark SQL and DataFrames-
+--------------------------------------------------------------------------------------------------
+Spark SQL is Apache Spark’s module for working with structured data.
+It allows you to seamlessly mix SQL queries with Spark programs.
+With PySpark DataFrames you can efficiently read, write, transform, and analyze data using Python and SQL.
+Whether you use Python or SQL, the same underlying execution engine is used so you will always leverage the full power of Spark.
+
+Pandas API on Spark-
+-------------------------------------------------------------------------------------------------------------
+Pandas API on Spark allows you to scale your pandas workload to any size by running it distributed across multiple nodes.
+If you are already familiar with pandas and want to leverage Spark for big data,
+pandas API on Spark makes you immediately productive and lets you migrate your applications without modifying the code.
+You can have a single codebase that works both with pandas (tests, smaller datasets) and with Spark (production, distributed datasets) 
+and you can switch between the pandas API and the Pandas API on Spark easily and without overhead.
+
+Structured Streaming-
+----------------------------------------------------------------------------------------------------------------
+
+Structured Streaming is a scalable and fault-tolerant stream processing engine built on the Spark SQL engine.
+You can express your streaming computation the same way you would express a batch computation on static data.
+The Spark SQL engine will take care of running it incrementally and continuously and updating the final result as streaming data continues to arrive.
+
+Machine Learning (MLlib)-
+-----------------------------------------------------------------------------------------------------------------------------
+
+Built on top of Spark, MLlib is a scalable machine learning library that provides a uniform set of high-level APIs 
+that help users create and tune practical machine learning pipelines.
+
+
+Spark Core and RDDs-
+-------------------------------------------------------------------------------------------------------------------------
+
+Spark Core is the underlying general execution engine for the Spark platform that all other functionality is built on top of. 
+It provides RDDs (Resilient Distributed Datasets) and in-memory computing capabilities.
+Note that the RDD API is a low-level API which can be difficult to use and you do not get the benefit of Spark’s automatic query optimization capabilities.
+We recommend using DataFrames (see Spark SQL and DataFrames above) instead of RDDs as it allows you to express what you want more easily 
+and lets Spark automatically construct the most efficient query for you.
+
+Spark Streaming (Legacy)-
+-----------------------------------------------------------------------------------------------------------------------------------
+
+Spark Streaming is an extension of the core Spark API that enables scalable, high-throughput, fault-tolerant stream processing of live data streams.
+
+Note that Spark Streaming is the previous generation of Spark’s streaming engine.
+It is a legacy project and it is no longer being updated.
+There is a newer and easier to use streaming engine in Spark called Structured Streaming which you should use for your streaming applications and pipelines.
+
+
+1)%run "./Includes/Utility-Methods"
+
+Declared various utility methods:
+Declared printRecordsPerPartition(df:DataFrame) for diagnostics
+Declared computeFileStats(path:String) returns (count:Long, bytes:Long) for diagnostics
+Declared tracker for benchmarking
+Declared cacheAs(df:DataFrame, name:String, level:StorageLevel) for better debugging
+Declared benchmarkCount(lambda:DataFrame) returns (df:DataFrame, total:Long, duration:Long) for diagnostics
+Declared untilStreamIsReady(name:String) to control workflow
+
+
+2) Our entry point for Spark 2.0 applications is the class SparkSession.
+
+An instance of this object is already instantiated for us which can be easily demonstrated by running the next cell:
+print(spark)
+
+3) It's worth noting that in Spark 2.0 SparkSession is a replacement for the other entry points:
+
+SparkContext, available in our notebook as sc.
+SQLContext, or more specifically it's subclass HiveContext, available in our notebook as sqlContext.
+
+print(sc)
+print(sqlContext)
+
+4)
+
