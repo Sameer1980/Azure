@@ -1,0 +1,398 @@
+1) In the Azure Marketplace you can find, try, buy, and deploy the software and services you need to build new solutions and manage your cloud infrastructure. You can provision end-to-end solutions quickly and reliably, hosted in your own Azure environment.
+
+2)
+
+How does Azure work?
+
+Azure is Microsoft's public cloud platform. Azure offers a large collection of services, which includes platform as a service (PaaS), infrastructure as a service (IaaS), and managed database service capabilities. However, what exactly is Azure, and how does it work?
+
+Azure, like other cloud platforms, relies on a technology known as virtualization. Most computer hardware can be emulated in software. Computer hardware is simply a set of instructions, which are permanently, or semi-permanently, encoded in silicon. Emulation layers are used to map software instructions to hardware instructions. Emulation layers allow virtualized hardware to execute in software like the actual hardware itself.
+
+Virtualization seperates the tight coupling between a computer hardware(RAM,CPU,Cache) and its OS using an abstraction layer called Hypervisor.
+The Hypervisor emulates all the functions of a real computer and its CPU into a virtual machine. It can run multiple VMs at the same time optimize the capacity of its virtual hardware,the VMs can run any OS like the Windows or Linux.Azure takes this virtualization and replicates on a massive scale on datacentres across the world.
+
+Each datacentre has multiple racks with servers and each server has a hypervisor to run multiple VMs. A network switch provides connectivity to all these servers. One server in each rack runs a special piece of software called FabricContoller.The FabricController is connected to another piece of software called Orchestrator.The Orchestrator is responsible what happens to everything in Azure including respnding to user requests.User make requests to the Orchestrator using Web API. The API can be called by many tools including the user interface of the Azure portal.   
+
+Essentially, the cloud is a set of physical servers in one or more datacenters. The datacenters execute virtualized hardware for customers. So how does the cloud create, start, stop, and delete millions of instances of virtualized hardware for millions of customers simultaneously?
+
+To understand the servers, let's look at the architecture of hardware in the datacenter. Inside each datacenter, there's a collection of servers sitting in server racks. Each server rack contains many server blades, and a network switch. These provide network connectivity and a power distribution unit (PDU), which creates power. Racks are sometimes grouped together in larger units known as clusters.
+
+The server racks, or clusters, are chosen to run virtualized hardware instances for the user. However, some servers run cloud management software, known as a fabric controller. The fabric controller is a distributed application with many responsibilities. It allocates services, monitors the health of the server and the services running on it, and heals servers when they fail.
+
+Each instance of the fabric controller is connected to another set of servers running cloud orchestration software, typically known as the front end. The front end hosts the web services, RESTful APIs, and internal Azure databases, which are used for all functions in the cloud.
+
+For example, the front end hosts the services that handle customer requests. The requests allocate Azure resources and services such as Azure Virtual Machines, and Azure Cosmos DB. First, the front end validates and verifies if the user is authorized to allocate the requested resources. If so, the front end checks a database to locate a server rack with sufficient capacity, which instructs the fabric controller to allocate the resource.
+
+Azure is a huge collection of servers and networking hardware, which runs a complex set of distributed applications. These applications orchestrate the configuration and operation of virtualized hardware and software on those servers. The orchestration of these servers is what makes Azure so powerful. With Azure, users don't have to maintain and upgrade their hardware as Azure does this behind the scenes.
+
+Q)What are Virtual Machines? 
+
+A)Virtual Machines are software emulations of physical computers. They include a virtual processor, memory, storage, and networking resources. Virtual Machines host an operating system and you can install and run software just like a physical computer. When using a remote desktop client, you can use and control the Virtual Machine as if you were sitting in front of it. With Azure Virtual Machines, you can create and use Virtual Machines in the Cloud. Virtual Machines, also known as VMs, provide infrastructure as a service, IaaS, and can be used in different ways. When you need total control over an operating system and environment, Virtual Machines are an ideal choice. Just like a physical computer, you can customize all the software running on the Virtual Machine. This ability is helpful when you're running custom software or custom hosting configurations. 
+
+Q)What are Virtual Machine Scale Sets? 
+A)Virtual Machine Scale Sets are an Azure compute resource that you can use to deploy and manage a set of identical Virtual Machines, Azure Virtual Machine Scale Sets lets you create and manage a group of identical load balanced Virtual Machines. Scale Sets allow you to centrally manage, configure and update a large number of Virtual Machines in minutes to provide highly available applications. The number of Virtual Machines instances can automatically increase or decrease in response to demand or defined schedule. For this reason, it's easier to build large-scale services targeting Big Compute, Big Data, and containerized workloads. As demand goes up, more Virtual Machine instances can be added. As demand goes down, Virtual Machine instances can be removed. The process can be manual, automated, or a combination of both. 
+
+Container instances and Azure Kubernetes Service or AKS, are Azure compute resources that you can use to deploy and manage containers. Containers are lightweight virtualized application environments. They're designed to be quickly created, scaled out, and stopped dynamically. You can run multiple instances of a containerized application on a single host machine.	
+
+An Azure Virtual Machine gives you the flexibility of virtualization without having to buy and maintain the physical hardware that runs the virtual machine. You still need to configure, update, and maintain the software that runs on the virtual machine. You can create a provision of virtual machine in minutes when you select a pre-configured virtual machine image. Selecting an image is one of the most important decisions you'll make when you create a virtual machine. An image is a template used to create a virtual machine. These templates already include an operating system and often other software like development tools or web hosting environments. Here are some examples of when to use virtual machines. 1)During testing and development- Virtual machines provide a quick and easy way to create different operating system and application configurations. Test and development personnel could then easily delete the virtual machines when they no longer need them. 2)When running applications in the cloud- The ability to run certain applications in the public cloud, as opposed to creating a traditional infrastructure to run them, can provide substantial economic benefits. For example, an application might need to handle fluctuations in demand. Shutting down VMS when you don't need them or quickly starting them up to meet a sudden increase in demand means you pay only for the resources you use. 3)When extending your datacenter to the cloud- An organization can extend the capabilities of its own on-premises network by creating a virtual network in Azure and adding VMS to that virtual network. Applications like SharePoint can then run on an Azure VM instead of running locally. This arrangement makes it easier or less expensive to deploy than in an on- premises environment.4) During disaster recovery- As with running certain types of applications in the cloud and extending an on- premises network to the cloud. You can get significant cost savings by using an IAS based approach to disaster recovery. If a primary datacenter fails, you can create VMS running on Azure to run your critical applications and then shut them down when the primary data center becomes operational again. Virtual machines are also an excellent choice when you move from a physical server to the cloud. This is also known as lift and shift. You can create an image of the physical server and host it within a virtual machine with little or no changes. Just like a physical on-premises server, you must maintain the virtual machine. You update the installed operating system on the software it runs. You can run single virtual machines for testing, development, or minor tasks. Or you can group virtual machines together to provide high availability, scalability, and redundancy. No matter what you're up time requirements are, Azure has several features that can meet them. These features include virtual machine scale sets, Azure Batch. Let's start off by looking at virtual machine scale sets. Virtual machine scale sets lets you create and manage a group of identical load balanced virtual machines. Imagine you're running a website that enables scientists to upload astronomy images that need to be processed. If you duplicated the virtual machine, you'd normally need to configure an additional service to write requests between multiple instances of the website. Virtual machine scale sets could do that work for you. Scale sets allow you to centrally manage, configure, and update a large number of virtual machines in minutes to provide highly available applications. The number of virtual machine instances can automatically increase or decrease in response to demand or define schedule. With virtual machine scale sets, you can build large scale services for areas such as compute, big data, and other container workloads. Now that you have explored virtual scale sets, let's take a look at Azure Batch. Azure Batch enables large scale parallel and high performance computing or HPC, batch jobs with the ability to scale to tens, hundreds or thousands of virtual machines. When you're ready to run a job, Batch does the following. Starts a pool of compute virtual machines for you. Installs applications and staging data, runs jobs with as many tasks is you have, identifies failures, reques work, scales down the pool as work completes. There might be situations in which you need role computing power or supercomputer level compute power. Azure provides these capabilities. 
+
+Broad category list of Azure Services.
+-------------------------------------------
+
+1) Compute Services
+2) Cloud Storage
+3) Networking
+4)App Hosting
+5) AI
+6) IOT
+7) Integration
+8) Security.
+
+a) You can treat cloud resources like you would resources in your own datacenter. When you are finished using them, you give them back. You are only billed for what you use.
+
+b) Instead of maintaining CPUs and storage in your datacenter, you rent them for the time that you need them. The cloud provider takes care of maintaining the underlying infrastructure for you. 
+
+c) Cloud-based resources can be deployed and configured quickly as your application requirements change.
+
+d) Depending on the service-level agreement (SLA) that you choose, your cloud-based applications can provide a continuous user experience with no apparent downtime even when things go wrong.
+
+e) Cloud-based applications can be configured to take advantage of autoscaling, so your applications will always have the resources they need.
+
+f)A distributed cloud is not a valid type of cloud computing. Distributed computing divides a single task among multiple computers that are connected via a network to achieve the task faster.
+
+g)The Azure portal updates continuously and requires no downtime for maintenance activities. This configuration makes the Azure portal resilient to individual datacenter failures and avoids network slowdowns by being close to users.
+
+h)Serverless computing enables developers to build applications faster by eliminating the need for them to manage infrastructure. 
+
+With serverless applications, the cloud service provider automatically provisions, scales, and manages the infrastructure required to run the code.
+
+i)The Azure Marketplace is a service on Azure that helps connect end-users with Microsoft partners, independent software vendors (ISVs), and start-ups that are offering their solutions and services, which are optimized to run on Azure.
+
+j) Azure Blob storage provides storage service for very large objects such as video files or bitmaps.
+
+k)With the Azure portal, you can build, manage, and monitor everything from simple web apps to complex cloud deployments. Create custom dashboards for an organized view of resources and configure accessibility options for an optimal experience.
+
+
+l)With Serverless applications, the Cloud Service Provider automatically provisions scales, and manages the infrastructure required to run the code. Serverless architectures are highly scalable and event-driven, only using resources when a specific function or trigger occurs. It's important to note that servers are still running the code. The serverless name comes from the fact that the tasks associated with infrastructure provisioning and management are invisible to the developer. This approach enables developers to increase their focus on the business logic and deliver more value to the core of the business. Serverless Computing helps teams increase their productivity and bring products to market faster, and it allows organizations to better optimize resources and stay focused on innovation.
+
+m)There are three deployment models for cloud computing. Public cloud, private cloud, and hybrid cloud. Each deployment model has different aspects that you should consider as you migrate to the cloud. In a public cloud, services are offered over the public internet and available to anyone who wants to purchase them. Cloud resources, such as servers and storage are owned and operated by a third-party cloud service provider and delivered over the Internet. A private cloud consists of computing resources used exclusively by users from one business or organization. A private cloud can be physically located at your organization's on-site or on-premises data center. It can also be hosted by a third-party service provider. In the third model, hybrid cloud computing environments combine a public cloud and a private cloud by allowing data and applications to be shared between them. This image illustrates several of the cloud computing concepts that are presented in this unit. In this example, several factors are demonstrated when you were considering where to deploy a database server in a hybrid cloud environment. As your resources moved from on-premises to off-premises, your costs are reduced and your administration requirements decrease.
+
+n) With Agility, cloud-based resources can be deployed and configured quickly as your application requirements change.
+
+o) With vertical scaling, computing capacity can be increased by adding additional RAM or CPUs to a virtual machine. 
+
+With horizontal scaling, computing capacity can be increased by adding instances of a resource. 
+
+You can scale vertically by adding additional virtual machines to your configuration.
+
+p) In a consumption-based model, you only pay for additional resources when they are needed.
+   In a consumption-based model, you don’t need to purchase and manage costly infrastructure that they may or may not use to its full capacity.
+   With consumption-based models there are no upfront costs.
+
+q) Operational expenditure (OpEx) is spending money on services or products now and being billed for them now. 
+
+You can deduct this expense in the same year you spend it. There is no upfront cost, as you pay for a service or product as you use it.
+
+r) The PaaS cloud service model is a managed hosting environment. In this model the cloud provider manages the virtual machines and networking resources. The cloud tenant deploys their applications into this managed hosting environment.
+
+s) IaaS is the cloud service model that is closest to managing physical servers. In this model the cloud provider keeps the hardware up to date but operating system maintenance and network configuration are left to the cloud tenant. 
+
+t) An account can have one subscription or multiple subscriptions that have different billing models and to which you apply different access-management policies.
+
+u) In Azure each management group and subscription can only support one parent.
+
+v)If you delete a resource group, all resources contained within are also deleted. Resource groups make it easy to remove a set of resources at once.
+
+w) One of the benefits of using Resource Manager is the ability to deploy, manage, and monitor all the resources for your solution as a group, rather than handling these resources individually.
+
+x) Resources are created in Regions, which are different geographical locations around the globe that contain Azure datacenters. 
+
+y)Not every region supports Availability Zones.
+z) An account can have one subscription or multiple subscriptions that have different billing models and to which you apply different access-management policies.
+
+1) Operational Expenditure (OpEx) is spending money on services or products now and being billed for them now. You can deduct this expense in the same year you spend it. There is no up-front cost, as you pay for a service or product as you use it.
+
+2)In Azure each management group can have many children.
+Azure management groups support up to 10,000 management groups in a single directory.
+A management group tree can support up to six levels of depth.	
+
+3)Azure SQL (sequel) Database is a platform as a service (PaaS) database engine. It handles most of the database management functions, such as upgrading, patching, backups, and monitoring, without user involvement.
+
+Azure SQL Database provides you with a high performance, reliable, fully managed and secure database. You can use it to build data driven applications and websites in the programming language of your choice without needing to manage infrastructure. 
+
+Azure SQL Database is a platform as a service, PaaS database engine. It handles most of the database management functions, such as upgrading, patching, backups and monitoring without user involvement. SQL database also provides 99 0.99 percent availability. With Azure SQL Database, you can create a highly available and high performance data storage layer for the applications and solutions in Azure. Microsoft handles all updates to the SQL on operating system code. You don't have to manage the underlying infrastructure. In a nutshell, Azure SQL Database is a fully managed service that has built in high availability, backups and other common maintenance operations. The PaaS capabilities that are built into SQL Database enable you to focus on the domain specific database administration and optimization activities that are critical for your business. Azure SQL Database can be the right choice for a variety of modern cloud applications because it enables you to process both relational data and non relational structures such as graphs, JSON, Spatial and XML. You can also use advanced query processing features such as high performance in memory technologies and intelligent query processing. In fact, the newest capabilities of SQL Server are released first to SQL Database on then to SQL Server itself. You get the newest SQL Server capabilities with no overhead for updates or upgrades tested across millions of databases. Tailwind Traders currently uses several on premises servers running SQL Server, which provide data storage for your public facing website, for example, customer data, order history and product catalogs. In addition, your on premises servers running SQL Server also provide data storage for your internal only training portal website. 
+
+You can migrate your existing SQL Server databases with minimal downtime by using the Azure Database Migration Service. After you assess and resolve any remediation required, you're ready to begin the migration process. The Azure Database Migration Service performs all of the required steps, you just change the connection string in your apps.
+
+Azure SQL Managed Instance--
+
+Server-level collation in Azure SQL Managed Instance can be specified when the instance is created but cannot be changed later. Review the following link to explore the comparisons between SQL Database and SQL Managed instances:
+ 
+https://docs.microsoft.com/en-us/azure/azure-sql/database/features-comparison
+
+Azure Cosmos DB supports SQL, MongoDB, Cassandra, Tables, and Gremlin APIs.Azure Cosmos DB supports schema-less data, which lets you build highly responsive and Always On applications to support constantly changing data. You can use this feature to store data that is updated and maintained by users around the world.Cosmos DB level of flexibility means that as you migrate your company's databases to Azure Cosmos DB, your developers can stick with the API where they're most comfortable.Azure Cosmos DB supports open-source APIs and SDKs.
+
+Azure Synapse Analytics is the logical choice for analyzing large volumes of data. Azure Synapse Analytics (formerly Azure SQL Data Warehouse) is a limitless analytics service that brings together enterprise data warehousing and big data analytics. 
+
+You can migrate your existing SQL Server databases with minimal downtime using the Azure Database Migration Service. The Azure Database Migration Service performs all the required steps. You just change the connection string in your apps.
+
+The Azure database for MySQL supports Automatic backups and point-in-time-restore for up to 35 days.
+
+Azure HDInsight is a fully managed, open-source analytics service for enterprises. It is a cloud service that makes it easier, faster, and more cost-effective to process massive amounts of data. HDInsight allows you to run popular open-source frameworks and create cluster types.
+
+Containers are managed through a container orchestrator, which can start, stop, and scale-out application instances as needed. There are two ways to manage both Docker and Microsoft-based containers in Azure. Azure Container Instances or ACI and Azure Kubernetes Service or AKS. Azure Container Instances offers the fastest and simplest way to run a container in Azure, without having to manage any Virtual Machines or adopt any additional services.
+It's a platform as a service offering that allows you to upload your containers, which it runs for you. Azure Kubernetes Service is a complete orchestration service for containers with distributed architectures and large volumes of containers. Orchestration is the task of automating and managing a large number of containers and how they interact.
+
+In your research for Tailwind Traders, you've looked at two different ways that you can virtualize your application. Another alternative is to deploy your application's front end websites to Azure App Service, which makes it easy to respond to application demand. App Service enables you to build and host web apps, background jobs, mobile backends, and RESTful APIs in the programming language of your choice, without managing infrastructure.
+It offers automatic scaling and high availability. App Service supports Windows and Linux, and enables automated deployments from GitHub, Azure DevOps, or any git repo to support a continuous deployment model. This platform as a service environment allows you to focus on the website an API logic, while Azure handles the infrastructure to run and scale your web applications. You pay for the Azure compute resources your app uses while it processes requests based on the App Service plan you choose. 
+The App Service plan determines how much hardware is devoted to your host. For example, the plan determines whether it's dedicated or shared hardware and how much memory is reserved for it. There's even a free tier you can use to host small, low traffic sites. With App Service, you could host most common App Service styles like web apps, API apps, WebJobs, and mobile apps.
+App Service handles most of the infrastructure decisions you deal with in hosting web accessible apps. Deployment and management are integrated into the platform. Endpoints can be secured. Sites can be scaled quickly to handle high traffic loads. The built-in load balancing and traffic manager provide high availability. All of these app styles are hosted in the same Infrastructure and share these benefits. 
+
+This flexibility makes App Service the ideal choice to host web-oriented applications. App Service includes full support for hosting web apps by using ASP.NET, ASP.NET Core, Java, Ruby, Node.js, PHP, or Python. You can choose either Windows or Linux as the host operating system. Much like hosting a website, you can build REST-based web APIs by using your choice of language and framework.
+
+You get full swagger support and the ability to package and publish your API in Azure Marketplace. The produced apps can be consumed from any HTTP or HTTPS based client. You can use the WebJobs feature to run a program,.EXE, Java, PHP, Python or Node.js, or script.cmd. PowerShell or Bash in the same context as a web app, API app, or a mobile app.They can be scheduled or run by a trigger. WebJobs are often used to run background tasks as part of your application logic. 
+
+You can also use the mobile apps feature of App Service to quickly build a backend for iOS and Android apps. With just a few clicks in the Azure portal, you can store mobile app data in a cloud-based SQL database.
+
+ Authenticate customers against common social providers, such as MSA, Google, Twitter, and Facebook. Send push notifications, execute custom backend logic in C# or Node.js. On the mobile app side, this SDK support for native iOS and Android, Xamarin, and React native apps. 
+
+ To summarize, Azure App Service is a fully managed web hosting service for building web apps, mobile backends, and RESTful APIs. Azure App Service also provides pricing and performance options that cater for every need, from small websites to globally scaled web applications.
+
+Azure functions is the serverless computing service hosted on the Microsoft Azure public cloud. Azure functions and serverless computing in general is designed to accelerate and simplify application development. 
+
+For a large amount of time, your application is waiting for a particular input before it performs any processing. To reduce your costs, you want to avoid having to pay for the time that your application is waiting for input. With that in mind, you've decided to investigate Azure functions to see if it can help. Azure functions is the serverless computing service hosted on the Microsoft Azure public cloud. Azure functions and serverless computing in general is designed to accelerate and simplify application development.
+
+Before launching straight in, let's first look at serverless computing. Serverless computing is the abstraction of servers, infrastructure, and operating systems. With serverless computing, Azure takes care of managing the server infrastructure and the allocation and deallocation of resources based on demand.
+ Infrastructure isn't your responsibility. Scaling and performance are handled automatically. You build only for the exact resources you use. There's no need to even reserve capacity. Serverless computing includes the abstraction of servers and event-driven scale and micro-billing.
+
+Let's explore each of these concepts. Serverless computing abstracts the servers you run on. You never explicitly reserved server instances. The platform manages that for you. Each function execution can run on a different Compute Instance. This execution context is transparent to the code. With serverless architecture, you deploy your code which then runs with high availability. Serverless computing is an excellent fit for workloads that respond to incoming events.
+Events include triggers by timers, for example, if a function needs to run every day at 10:00 AM UTC, HTTP for example, API and web hooks scenarios, queues, for example, with order processing and much more. 
+Instead of writing an entire application, the developer offers a function, which contains both code and metadata about its triggers and bindings. The platform automatically schedules the function to run and scales the number of compute instances based on the rate of incoming events. Triggers define how a function is invoked. Bindings provide a declarative way to connect to services from within the code.
+
+Traditional computing bills for a block of time, like paying a monthly or annual rate for website hosting. This method of billing is convenient, but isn't always cost-effective. Even if a customer's website gets only one hit today, they still pay for a full day's worth of availability. 
+With serverless computing, they pay only for the time their code runs. If no active function executions occur, they're not charged. For example, if the code runs once a day for two minutes, they're charged for one execution and two minutes of computing time.
+
+Azure Functions is used when you need to perform work in response to an event (often via a REST request), timer, or message from another Azure service, and when that work can be completed quickly, within seconds or less.
+
+Azure has two implementations of serverless computer. Functions can execute code in almost any modern language. Logic Apps are designed in a web-based designer and can execute logic triggered by Azure services without writing any code.
+
+ Let's first take a look at Azure Functions. When you're concerned only about the code running your service and not the underlying platform or infrastructure using Azure Functions is ideal. Functions are commonly used when you need to perform work in response to an event, often via a REST request, timer or message from another Azure service, and when that work can be completed quickly within seconds or less.
+
+Using a virtual machine-based approach you'd incur costs even when the virtual machine is idle. With Functions, Azure runs your code when it's triggered and automatically deallocates resources when the function is finished. 
+
+In this model, you're only charged for the CPU time used while your function runs. Functions can be either stateless or stateful.
+
+When they're stateless, the default, they behave as if they're restarted every time they respond to an event. When they're stateful called Durable Functions a context is passed through the function to track prior activity.
+
+Functions are a key component of serverless computing. They're also a general compute platform for running any type of code. 
+If the needs of the developer's app change you can deploy the project in an environment that isn't serverless. This flexibility allows you to manage scaling, run on virtual networks, and even completely isolate the Functions.
+
+In our case study, Tailwind Traders, you determined that some of your application logic is event-driven. To reduce your costs, you want to avoid having to pay for the time that your application is waiting for input. Azure Functions is ideal in this scenario. The serverless app runs only when it's triggered by an event. The provider charges only for compute time used by that execution rather than a flat monthly fee for maintaining a physical or virtual server. 
+
+ Azure Logic Apps. Logic Apps are similar to Functions. Both enable you to trigger logic based on an event. Where Functions execute code, Logic Apps execute workflows that are designed to automate business scenarios and are built from predefined logic blocks.
+Every Azure Logic Apps workflow starts with a trigger which fires when a specific event happens or when newly available data meets specific criteria. 
+Many triggers include basic scheduling capabilities. Developers can specify how regularly their workloads will run. Each time the trigger fires, the Logic Apps engine creates a Logic App instance that runs the actions in the workflow.
+These actions can also include data conversions and flow controls such as conditional statements, switch statements, loops, and branching.
+ You create Logic App workflows by using a visual Designer on the Azure portal or in Visual Studio. The workflows are persisted as a JSON file with a known workflow schema. Azure provides more than 200 different connectors and processing blocks to interact with different services.
+
+These resources include the most popular enterprise apps. You can also build custom connectors and workflow steps, if the service you need to interact with isn't covered. You then use the visual Designer to link connectors and blocks together. You pass data through the workflow to do custom processing, often all without writing any code.
+
+As an example, let's say a ticket arrives in Zendesk. You could detect the intent of the message with cognitive services, create an item in SharePoint to track the issue, add the customer to your Dynamics 365 CRM system, if they aren't already in your database, send a follow-up e-mail to acknowledge their request. All of those actions could be designed in a visual Designer, which makes it easy to see the logic flow. For this reason, it's ideal for a business analyst role.
+
+A)Azure Batch enables large-scale parallel and high-performance computing (HPC) batch jobs with the ability to scale to tens, hundreds, or thousands of VMs.
+B)Azure Container Instances and Azure Kubernetes Service (AKS) are Azure compute resources that you can use to deploy and manage containers. These are lightweight, virtualized application environments that are designed to be quickly created, scaled out, and stopped dynamically. You can run multiple instances of a containerized application on a single host machine.
+C) Virtual machine scale sets are an Azure compute resource that you can use to deploy and manage a set of identical VMs. With all VMs configured the same, virtual machine scale sets are designed to support true autoscale.
+D)Azure Container Instances offers the fastest and simplest way to run a container in Azure without having to manage any virtual machines or adopt any additional service.
+E)Azure Container Instances offers the fastest and simplest way to run a container in Azure without having to manage any virtual machines or adopt any additional services. It is a PaaS offering that allows you to upload your containers, which it will run for you.
+F)Azure Cosmos DB supports schema-less data, which lets you build highly responsive and Always-On applications to support constantly changing data. You can use this feature to store data that is updated and maintained by users around the world and supports multiple APIs.
+G)Azure database for PostgreSQL supports Automatic backups and point-in-time-restore for up to 35 days. 
+I) Azure Database for MySQL delivers built-in high availability with no additional cost of 99.99% SLA.
+J) With App Services, you can quickly build, deploy, and scale enterprise-grade web, mobile, and API apps running on any platform.
+K)App Services provides a managed hosting environment where developers can upload their web applications without having to worry about dealing with the physical hardware and software requirements.
+--------------------------------------------------------------------------------------------------------------------------------------------
+Microsoft Azure Storage fundamentals
+X---------------------------------------X
+The CTO of your company, Tailwind Traders, has tasked your team with migrating all of your files to the cloud. Your team has chosen Azure Storage, which is a service that you can use to store files, messages, tables, and other types of information. Clients such as websites, mobile apps, desktop applications, and many other types of custom solutions, can read data from and write data to Azure Storage.
+
+Azure storage is also used by Infrastructure as a Service Virtual Machines and Platform as a Service Client Services. 
+
+ To begin using Azure Storage, you first create an Azure Storage account to store your data objects. You can create an Azure Storage account by using the Azure portal, PowerShell or the Azure CLI.
+
+You should note that Azure Storage is not the same as Azure Database Services. Your storage account will contain all of your Azure Storage data objects such as blobs, files and disks.For example, by using storage accounts to store her files in the cloud, Sally will be able to access these files through unique namespace, using HTTP or HTTPS. These files will be highly available and securely stored within this Azure Storage account.
+
+ Please note that Azure VMs, you use Azure Disk Storage to store virtual disks. However, you can't use Azure Disk Storage to store a disk outside of a virtual machine.
+
+A Storage account provides a unique namespace for your Azure storage data, that's accessible from anywhere in the world over HTTP or HTTPS. Data in this account is secure, highly available, durable, and massively scalable.
+
+Azure Disk Storage
+---------------------------------
+
+Disk storage provides disks for Azure Virtual Machines. Applications and other services can access and use these disks as needed, similar to how they would in on-premises scenarios.
+
+Disk storage allows data to be persistently stored and accessed from an attached virtual hard disk. Disks come in many different sizes and performance levels, from solid-state drives, SSDs, to traditional spinning hard disk drives, HDDs, with varying performance tiers. 
+
+You can use standard SSD and HDD disks for less critical workloads. Premium SSD disks for mission-critical production applications, and ultra disks for data-intensive workloads such as SAP HANA, top-tier Databases, and transaction-heavy workloads.
+Azure has consistently delivered enterprise-grade durability for Infrastructure as a servers disks with an industry-leading zero percent annualized failure rate. An Azure Virtual Machine can use separate disks to store different data.
+
+Azure Blob Storage fundamentals
+----------------------------------
+
+a)Blob storage is ideal for storing files for distributed access.
+b)Blob storage is also good for streaming audio and video.
+c)You can store data for backup and restore, disaster recovery, and archiving.
+
+Azure Files fundamentals
+----------------------------------
+
+Azure Files offers fully managed file shares in the Cloud that are accessible via the industry standard server message block and network file system preview protocols. Azure file shares can be mounted concurrently by Cloud or on-premises deployments of Windows, Linux, and macOS. 
+
+Applications running in Azure Virtual Machines or Cloud services can mount a file storage share to access file data just as a desktop application would mount, a typical SMB share.Any number of Azure Virtual Machines or roles can mount and access the file storage share simultaneously. 
+Typical usage scenarios would be to share files anywhere in the world, diagnostic data or application data sharing. Use Azure Files for the following situations; many on-premises applications use file shares. Azure Files makes it easier to migrate those applications that share data to Azure.
+
+If you mount the Azure File share to the same drive letter that the on-premises application uses, the part of your application that accesses the file share should work with a minimal if any changes.Store configuration files on a file share and access them for multiple VMs.
+Tools and utilities used by multiple developers in a group can be stored on a file share, ensuring that everybody can find them and that they use the same version. Write data to a file share and process or analyze the data later.
+For example, you might want to do this with diagnostic logs, metrics and crashed dumps. This illustration shows Azure Files being used to share data between two geographical locations. Azure Files ensures the data is encrypted at rest, and the SMB protocol ensures that the data is encrypted in transit. 
+
+One thing that distinguishes Azure Files from files on a corporate file share is that you can access the files from anywhere in the world by using a URL that points to the file. You can also use shared access signature or SAS tokens to allow access to a private asset for a specific amount of time. A service SAS URI will show the resource URI and the SAS token.
+
+Azure Files makes it easier to migrate those applications that share data to Azure.
+
+Configuration files can be stored on a file share and accessed from multiple VM. Tools and utilities used by multiple developers in a group can be stored on a file share, ensuring that everybody can find them and that they use the same version.This is typically done with diagnostic logs, metrics, and crash dumps.
+
+Blob Access Tiers.
+------------------------------
+Data stored in the cloud can grow at an exponential pace. To manage costs for your expanding storage needs, it's helpful to organize your data based on attributes like frequency of access and planned retention period. Data stored in the cloud can be different based on how it's generated, processed and accessed over its lifetime. 
+
+Some data is actively accessed and modified throughout its lifetime. Some data is accessed frequently early in its lifetime, with access dropping drastically as the data ages. 
+
+Some data remains idle in the cloud and is rarely if ever accessed after it's stored. 
+
+To accommodate these different access needs, Azure provides several access tiers, which you can use to balance your storage costs with your access needs.
+
+Azure storage offers different access tiers for your blob storage, helping you store object data in the most cost effective manner. The available access tiers include hot access tier, optimized for storing data that is accessed frequently, for example, images for your website. Cool access tier, optimized for data that is infrequently accessed and stored for at least 30 days, for example, invoices for your customers. 
+
+ Archive access tier, appropriate for data that is rarely accessed and stored for at least 180 days with flexible latency requirements, for example, long term backups.
+
+Additionally, some considerations apply to the different access tiers. Only the hot and cool access tiers can be set at the account level. The archive access tier isn't available at the account level.
+
+Hot, cool and archive tiers can be set up at the blob level during upload or after upload. Data in the cool access tier can tolerate slightly lower availability, but still requires high durability, retrieval latency, and throughput characteristics similar to hot data.
+
+For cool data, a slightly lower availability service level agreement and higher access costs compared to hot data are acceptable tradeoffs for lower storage costs. Archive storage stores data offline and offers the lowest storage costs, but also the highest cost to rehydrate and access data. 
+--------------------------------------------------------------------------------------------------------------------------------------------
+A)You can use Azure Storage on its own. For example, you can use it as a file share. Developers also often use it as a repository for working data. These repositories can be used by websites, mobile apps, desktop applications, and many other types of custom solutions. Azure Storage is also used by Infrastructure as a Service (IaaS) virtual machines, and Platform as a Service (PaaS) cloud services.
+
+B) Blob Storage is ideal for serving images or documents directly to a browser, storing files for distributed access, and streaming media.
+
+C) Azure Files offers fully managed file shares in the cloud that are accessible via the industry standard Server Message Block (SMB) protocol. Azure file shares can be mounted concurrently by cloud or on-premises deployments of Windows, Linux, and macOS.
+
+D) One thing that distinguishes Azure Files from files on a corporate file share is that you can access the files from anywhere in the world using a URL that points to the file.
+
+E) You can also use Shared Access Signature (SAS) tokens to allow access to a private asset for a specific amount of time.
+
+F) 
+Hot storage tier is optimized for storing data that is accessed frequently, like images for your website.
+
+Microsoft Azure Networking Fundamentals
+X-----------------------------------------X
+
+Tailwind Traders has an on-premises data center that you plan to keep, but you want to use Azure to offload peak traffic by using virtual machines hosted in Azure. You want to keep your existing IP addressing scheme, and network appliances while ensuring that any data transfer is secure.
+
+Using Azure Virtual Network for your virtual networking can help you reach your goals. Azure virtual networks enable Azure resources such as VMs, web apps, and databases, to communicate with each other, with users on the Internet, and with your on-premises client computers.
+
+You can think of an Azure network as a set of resources that links other Azure resources. Azure Virtual Networks provide the following key networking capabilities: Isolation and segmentation, Internet communications, communicate between Azure resources, communicate with on-premises resources, route network traffic, filter network traffic, and connect virtual networks.
+
+Virtual Network allows you to create multiple isolated virtual networks. When you set up a virtual network, you define a private IP Address space by using either public or private IP Address ranges. You can divide that IP Address space into sub nets on allocate part of the defined address space to each named sub net.
+
+
+A) Internet communications is a capability of Azure virtual networks.
+B) Azure virtual networks gives you the capability of connecting virtual networks.
+C) The ability to communicate with on-premises resources is a capability of Azure virtual networks. 
+
+Let's explore the networking capabilities provided by Azure isolation and segmentation. Virtual Network allows you to create multiple isolated virtual networks. When you set up a virtual network, you define a private IP Address space by using either public or private IP Address ranges. You can divide that IP Address space into sub nets on allocate part of the defined address space to each named sub net. 
+
+ For name resolution. You can use the name resolution service that's built into azure. You also can configure the virtual network to use either an internal or an external DNA's server. 
+
+Internet communications-VM in Azure can connect to the Internet by default. You can enable incoming connections from the Internet by defining a public IP address or a public load balancer. 
+
+For VM management, you can connect via the Azure Lai Remote desktop protocol or secure shell.
+
+Communicate between Azure resources-You'll want to enable azure resources to communicate securely with each other. You could do that in one of two ways. Virtual networks. Virtual networks can connect not only VMS but other Azure resources such as the APP service environment for power ups, azure kubernetes, service on Azure virtual machine scale sets service endpoints.You can use service endpoints to connect to other azure resource types, such as as your sequel databases on storage accounts. This approach enables you to link multiple azure resources to virtual networks to improve security and provide optimal writing between resources.
+
+Azure virtual networks enable you to link resources together in your on premises environment and within your azure subscription. In effect, you can create a network that spans both your local and cloud environments.
+ There are three mechanisms for you to achieve this can activity. The point to site virtual private networks approach is like a virtual private network connection that a computer outside your organization makes back into your corporate network, except that it's working in the opposite direction.
+
+ In this case, the client computer initiates an encrypted VPN connection to azure to connect that computer to the Azure Virtual network.
+ A site to site virtual private network links your on premises VPN device or gateway to the azure VPN gateway in a virtual network.In effect, the devices in Azure can appear as being on the local network. The connection is encrypted and works over the Internet.
+
+Azure Express Route is the best approach for environment, where you need greater bandwidth and even higher levels of security. Express Route provides dedicated private connectivity toe azure that doesn't travel over the Internet.
+
+Network security groups- A network security group is an azure resource that can contain multiple inbound and outbound security rules. You can define these rules to allow or block traffic based on factors such a source and destination i p. Address ,Port and protocol network.
+
+Network security groups. A network security group is an azure resource that can contain multiple inbound and outbound security rules. You can define these rules to allow or block traffic based on factors such a source and destination i p. Address Port and protocol network.
+ 
+Virtual Appliances-a network virtual appliance is a specialized VM that can be compared to a hardened network appliance. A network virtual appliance carries out a particular network function, such as running a firewall or performing a wide area network or one optimization.
+
+You can link virtual networks together by using virtual network peering. Peering enables resources in each virtual network to communicate with each other. Thes virtual networks could be in separate regions, which allows you to create a global, interconnected network through azure. UDR is user defined routing. UDR is a significant update. The Azure is virtual networks, as this allows network admin is to control the writing tables between sub nets within a sub net as well as between Venus, thereby allowing for greater control over network traffic flow.
+Virtual Appliances, a network virtual appliance is a specialized VM that can be compared to a hardened network.
+
+
+Azure VPN Gateway Fundamentals
+-------------------------------------------
+A virtual private network, or VPN, is a type of private, interconnected network. VPNs use an encrypted tunnel within another network. They're typically deployed to connect two or more trusted private networks to one another over an untrusted network.
+ Typically, the public internet traffic is encrypted while traveling over the untrusted network to prevent eavesdropping or other attacks.
+
+For our tailwind, trade of scenario VPNs can enable branch offices to share sensitive information between locations. For example, let's say that your office is on the East Coast region of North America need to access your company's private customer data. Which is stored on servers that are physically located in a West Coast region.A VPN that connects your East Coast offices to your West Coast servers allows your company to securely access your private customer data. A VPN gateway is a type of virtual network gateway. 
+
+Azure VPN gateway instances are deployed in azure virtual network instances on enable the following connectivity. 
+
+a)Connect on premises data centers to virtual networks through a site to site connection. 
+b) Connect individual devices to virtual networks through a point to site connection. 
+c)Connect virtual networks to other virtual networks through a network to network connection.
+
+All transfer data is encrypted in a private tunnel as it crosses the internet. You can deploy only one VPN gateway in each virtual network, but you can use one gateway to connect to multiple locations, which includes other virtual networks or on premises data centers. 
+
+When you deploy a VPN gateway, you specify the VPN type, either policy based or right based. The main difference between these two types of VPNs is how traffic to be encrypted is specified.
+In azure both types of VPN gateways use a pre shared key as the only method of authentication. Policy-based VPNs gateways specify statically the IP address of packets that should be encrypted through each tunnel. This type of device evaluates every data packet against those sets of IP addresses to choose the tunnel where that packet is going to be sent through.
+Key features of policy based VPN gateways in azure include support for IKEV1 only IKE or internet key exchange is a protocol used to set up a secure, authenticated communications channel between two parties.
+Use of static writing where combinations of address prefixes from both networks control high traffic, is encrypted and decrypted through the VPN tunnel. The source and destination of the tunnel networks are declared in the policy and don't need to be declared in writing tables. 
+Policy-based VPN must be used in specific scenarios that require them, such as for compatibility with legacy on premises VPN devices.
+
+Azure ExpressRoute fundamentals
+-------------------------------------
+ExpressRoute lets you exchange your on premises networks into the Microsoft cloud over a private connection with the help of a connectivity provider.
+With ExpressRoute you can establish connections to Microsoft Cloud services such as Microsoft Azure on Microsoft 365. Connectivity can be from any to any pipe VPN network, a point to point ethernet network or a virtual cross connection through a collectivity provider at a co location facility.
+
+ExpressRoute connections don't go over the public Internet, this allows express route connections to offer more reliability, faster speeds, consistent latencies on higher security than typical connections over the Internet. For information on how to connect your networks to Microsoft using ExpressRoute see express right connectivity models. As part of your work for tailwind traders, you should understand what as your ExpressRoute is and how it integrates with on premises and as your networks.
+
+Now we will cover the benefits that ExpressRoute provides compared to other site to site connectivity options. As a result, you'll learn whether express route could provide your company with the best possible network performance throughout.
+
+This unit will focus on two different layers of the open systems interconnection or OSI model. Layer 2 or L2 is the dazzling glare, which provides no to note communication between two nodes on the same network.
+
+Layer 3 or L3 is the network layer, which provides addressing and writing between nodes on a multi node network. There are several benefits to using ExpressRoute as the connection service between azure and on premises networks.
+
+Layer 3 connectivity between your on premises network and the Microsoft Cloud through a connectivity provider. Connectivity can be from any to any IP VPN network, a point to point ethernet connection or through a virtual cross connection via an ethernet exchange. 
+
+
+----------Important points.
+A)You use service endpoints to connect to other Azure resource types, such as Azure SQL databases and storage accounts. This approach enables you to link multiple Azure resources to virtual networks, thereby improving security and providing optimal routing between resources.
+B) A VM in Azure can connect out to the Internet by default.
+C) A network virtual appliance is a specialized VM that can be compared to a hardened network appliance. A network virtual appliance carries out a particular network function, such as running a firewall or performing Wide Area Network (WAN) optimization.
+D)That’s correct. A network security group is an Azure resource that can contain multiple inbound and outbound security rules. You can define these rules to allow or block traffic, based on factors such as source and destination IP address, port, and protocol.
+E) Basic DDoS protection is selected by default. However this can be changed to standard during setup or at a later stage.
+F) You must provide a name for the virtual network.
+G)All resources must be associated with a valid subscription.
+H)Policy-based VPN gateways support IKEv1(Internet Key Exchange (IKE) is a standard protocol used to set up a secure and authenticated communication channel between two parties via a virtual private network (VPN). The protocol ensures security for VPN negotiation, remote host and network access.) only. Route-based VPNs support IKEv2.
+I)Combinations of address prefixes from both networks control how traffic is encrypted and decrypted through the VPN tunnel. The source and destination of the tunneled networks are declared in the policy and don't need to be declared in routing tables.
+J)Policy-based VPNs must be used in specific scenarios that require them, such as for compatibility with legacy on-premises VPN devices.
+
+K)A site-to-site connections will allow for the connection of on-premises datacenters to Azure virtual networks, but not through Express Route.
+L)	Point-to-point connections provide Layer 2 and Layer 3 connectivity between your on-premises site and Microsoft Azure. You can connect your offices or datacenters to Azure by using the point-to-point links. 
+M)Co-located providers can normally offer both Layer 2 and Layer 3 connections between your infrastructure, which might be located in the colocation facility, and the Microsoft cloud. 
+N)Archive storage stores data offline and offers the lowest storage costs but also the highest data rehydrate and access costs.
+O)Hot storage tier is optimized for storing data that is accessed frequently, like images for your website.
+P)Network security groups have security rules that enable you to filter the type of network traffic that can flow in and out of virtual network subnets and network interfaces. You create the network security group separately, and then associate it with the virtual network.
+Q)You connect on-premises data centers to Azure virtual networks through a site-to-site connection.
+R)Azure ExpressRoute lets you seamlessly extend your on-premises networks into the Microsoft cloud. This connection between your organization and Azure is dedicated and private. Establishing an ExpressRoute connection enables you to connect to Microsoft cloud services like Azure, Office 365, and Dynamics 365. Security is enhanced, connections are more reliable, latency is minimal, and throughput is greatly increased.
+S)You must deploy an Azure virtual network with enough address space for the additional subnet that you'll need for the VPN gateway. The address space for this virtual network must not overlap with the on-premises network that you'll be connecting to.
+T)You must create a Basic-SKU dynamic public IP address if using a non-zone-aware gateway. This address provides a public-routable IP address as the target for your on-premises VPN device. 
+U)You must create the virtual network gateway to route traffic between the virtual network and the on-premises data center or other virtual networks.
