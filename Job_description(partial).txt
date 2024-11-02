@@ -1,0 +1,75 @@
+There are four ways of accessing Azure Data Lake Storage Gen2 in Databricks:
+
+Mount an Azure Data Lake Storage Gen2 filesystem to DBFS using a service principal and OAuth 2.0.
+Use a service principal directly.
+Use the Azure Data Lake Storage Gen2 storage account access key directly.
+Pass your Azure Active Directory credentials, also known as a credential passthrough.
+
+Let’s use option 3.
+
+1. This option is the most straightforward and requires you to run the command, setting the data lake context at the start of every notebook session. Databricks Secrets are used when setting all these configurations
+
+2. To set the data lake context, create a new Python notebook, and paste the following code into the first cell:
+
+spark.conf.set(
+"fs.azure.account.key.<storage-account-name>.dfs.core.windows.net",
+""
+)
+3. Replace ‘<storage-account-name>’ with your storage account name.
+
+4. In between the double quotes on the third line, we will be pasting in an access key for the storage account that we grab from Azure
+
+5. Navigate to your storage account in the Azure Portal and click on ‘Access keys’ under ‘Settings’.
+
+Click the copy button, and paste the key1 Key in between the double quotes in your cell
+
+7. Attach your notebook to the running cluster and execute the cell. If it worked, you should see the following:
+
+If your cluster is shut down, or if you detach the notebook from a cluster, you will have to re-run this cell to access the data.
+
+9. Copy the below command in a new cell, filling in your relevant details, and you should see a list containing the file you updated.
+
+dbutils.fs.ls("abfss://<file-system-name>@<storage-account-
+name>.dfs.core.windows.net/<directory-name>")
+
+Load Data into a Spark DataFrame from the Data Lake
+Towards the end of the Error! Reference source not found. section, we uploaded a sample CSV file into ADLS.  We will now see how we can read this CSV file from Spark.
+
+We can get the file location from the dbutils.fs.ls command we ran earlier – see the full path as the output.
+
+Run the command given below:
+
+#set the data lake file location:
+file_location = "abfss://adbdemofilesystem@adlsgen2demodatalake.dfs.core.windows.net/raw/covid
+19/johns-hopkins-covid-19-daily-dashboard-cases-by-states.csv"
+ 
+#read in the data to dataframe df
+df = spark.read.format("csv").option("inferSchema", "true").option("header",
+"true").option("delimiter",",").load(file_location)
+ 
+#display the dataframe
+display(df)
+
+Create a table on top of the data in the data lake
+In the previous section, we loaded the data from a CSV file to a DataFrame so that it can be accessed using python spark API.  Now, we will create a Hive table in spark with data in an external location (ADLS), so that the data can be access using SQL instead of python code.
+
+In a new cell, copy the following command:
+
+%sql
+CREATE DATABASE covid_research
+
+Next, create the table pointing to the proper location in the data lake.
+
+%sql
+CREATE TABLE IF NOT EXISTS covid_research.covid_data
+USING CSV
+LOCATION 'abfss://adbdemofilesystem@adlsgen2demodatalake.dfs.core.windows.net/raw/covid
+19/johns-hopkins-covid-19-daily-dashboard-cases-by-states.csv'
+
+Run a select statement against the table.
+
+%sql
+
+select * 
+from covid_research.covid_data
+
