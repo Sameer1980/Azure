@@ -1,0 +1,1006 @@
+Q)What type of data stored in ADLS Gen2 ?
+A) SalesForce , SAP , ERP , clickstream, IOT data.
+SalesForce , SAP , ERP mainly financial and customer related data.
+
+1)IOT data related to Sales team. --> Whenever there is application, sale and delivery of products 
+through mobile app:
+A) Biometrics and supporting documents in their raw format are the IOT related data.
+   or the payment details made by customer through mobile app . 
+B) HR related attendance data from gate sensors. (Handled by the client themselves) 
+
+C) Clickstream data is related to marketing team.
+
+Q) What is the file format of each Source?
+A) SalesForce -> Parquet , JSON , CSV.(flat architecture and object storage).
+B) SAP -> CSV , Parquet , raw, JSON and Delta formats.(stored in Data Lake Gen 2 directories.)
+C) ERP -> Stored as CSV files using hierarchial namespace(year\month\week\day\year_month_week_day_timestamp.csv).
+D) IOT -> Azure blob storage.(stored in .zip or .gz formats)
+E) Clickstream -> This includes every click, page navigation, and interaction within a website or application, providing a real-time capture of a user’s online behavior. Stored in Apache Parquet and mainly .tar ( a compressed binary format). 
+
+Raw(Bronze) layer  --> ADLS Gen2.
+Silver layer --> Azure Databricks.
+Gold layer --> Azure Synapse Analytics. 
+
+Things that I do in Azure Databricks as a Data Engineer.
+
+Points:
+a) An Azure Databricks table is a collection of structured data. A Delta table stores data as a directory of files on cloud object storage and registers table metadata to the metastore within a catalog and schema. As Delta Lake is the default storage provider for tables created in Azure Databricks, all tables created in Databricks are Delta tables, by default. Because Delta tables store data in cloud object storage and provide references to data through a metastore, users across an organization can access data using their preferred APIs; on Databricks, this includes SQL, Python, PySpark, Scala, and R.
+ Delta Lake, is the foundation for storing data and tables in the Databricks lakehouse.
+Delta tables are typically used for data lakes, where data is ingested via streaming or in large batches.
+
+How does Azure Databricks mount cloud object storage?
+Azure Databricks mounts create a link between a workspace and cloud object storage, which enables you to interact with cloud object storage using familiar file paths relative to the Databricks file system. Mounts work by creating a local alias under the /mnt directory that stores the following information:
+
+Location of the cloud object storage.
+Driver specifications to connect to the storage account or container.
+Security credentials required to access the data.
+
+What is the syntax for mounting storage?
+The source specifies the URI of the object storage (and can optionally encode security credentials). The mount_point specifies the local path in the /mnt directory. Some object storage sources support an optional encryption_type argument. For some access patterns you can pass additional configuration specifications as a dictionary to extra_configs.
+
+dbutils.fs.mount(
+  source: str,
+  mount_point: str,
+  encryption_type: Optional[str] = "",
+  extra_configs: Optional[dict[str:str]] = None
+)
+
+Mount ADLS Gen2 or Blob Storage with ABFS
+You can mount data in an Azure storage account using a Microsoft Entra ID application service principal for authentication.
+
+configs = {"fs.azure.account.auth.type": "OAuth",
+       "fs.azure.account.oauth.provider.type": "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider",
+       "fs.azure.account.oauth2.client.id": "<appId>",
+       "fs.azure.account.oauth2.client.secret": "<clientSecret>",
+       "fs.azure.account.oauth2.client.endpoint": "https://login.microsoftonline.com/<tenantId>/oauth2/token",
+       "fs.azure.createRemoteFileSystemDuringInitialization": "true"}
+
+dbutils.fs.mount(
+source = "abfss://<container-name>@<storage-account-name>.dfs.core.windows.net/<directory-name>",
+mount_point = "/mnt/flightdata",
+extra_configs = configs)
+
+Use Databricks Notebook to convert CSV to Parquet
+Now that the csv flight data is accessible through a DBFS mount point, you can use an Apache Spark DataFrame to load it into your workspace and write it back in Apache parquet format to your Azure Data Lake Storage object storage.
+
+A Spark DataFrame is a two-dimensional labeled data structure with columns of potentially different types. You can use a DataFrame to easily read and write data in various supported formats. With a DataFrame, you can load data from cloud object storage and perform analysis and transformations on it inside your compute cluster without affecting the underlying data in cloud object storage. To learn more, see Work with PySpark DataFrames on Azure Databricks.
+
+Apache parquet is a columnar file format with optimizations that speed up queries. It's a more efficient file format than CSV or JSON. To learn more, see Parquet Files.
+
+In the notebook, add a new cell, and paste the following code into it
+
+You can create empty placeholder Delta tables so that the schema is later inferred during a COPY INTO command by setting mergeSchema to true in COPY_OPTIONS:
+
+CREATE TABLE IF NOT EXISTS my_table
+[COMMENT <table-description>]
+[TBLPROPERTIES (<table-properties>)];
+
+COPY INTO my_table
+FROM '/path/to/files'
+FILEFORMAT = <format>
+FORMAT_OPTIONS ('mergeSchema' = 'true')
+COPY_OPTIONS ('mergeSchema' = 'true');
+
+i)The SQL statement above is idempotent and can be scheduled to run to ingest data exactly-once into a Delta table.
+ii) The empty Delta table is not usable outside of COPY INTO. INSERT INTO and MERGE INTO are not supported to write data into schemaless Delta tables. After data is inserted into the table with COPY INTO, the table becomes queryable.
+
+Example: Set schema and load data into a Delta Lake table.
+A) The following example shows how to create a Delta table and then use the COPY INTO SQL command to load sample data from Databricks datasets into the table. You can run the example Python, R, Scala, or SQL code from a notebook attached to a Databricks cluster. You can also run the SQL code from a query associated with a SQL warehouse in Databricks SQL.(APPLICABLE ONLY FOR DATABRICKS DATASET)
+
+DROP TABLE IF EXISTS default.loan_risks_upload;
+
+CREATE TABLE default.loan_risks_upload (
+  loan_id BIGINT,
+  funded_amnt INT,
+  paid_amnt DOUBLE,
+  addr_state STRING
+);
+
+COPY INTO default.loan_risks_upload
+FROM '/databricks-datasets/learning-spark-v2/loans/loan-risks.snappy.parquet'
+FILEFORMAT = PARQUET;
+
+SELECT * FROM default.loan_risks_upload;
+
+B) Connect to Azure Data Lake Storage Gen2 or Blob Storage using Azure credentials.
+The following credentials can be used to access Azure Data Lake Storage Gen2 or Blob Storage:
+a)OAuth 2.0 with a Microsoft Entra ID service principal.
+b)Shared access signatures (SAS)- You can use storage SAS tokens to access Azure storage. With SAS, you can restrict access to a storage account using temporary tokens with fine-grained access control.You can only grant a SAS token permissions that you have on the storage account, container, or file yourself.
+c) Account keys:You can use storage account access keys to manage access to Azure Storage. Storage account access keys provide full access to the configuration of a storage account, as well as the data.
+
+Databricks recommends using a Microsoft Entra ID service principal or a SAS token to connect to Azure storage instead of account keys.
+
+Set Spark properties to configure Azure credentials to access Azure storage- You can set Spark properties to configure a Azure credentials to access Azure storage. The credentials can be scoped to either a cluster or a notebook. Use both cluster access control and notebook access control together to protect access to Azure storage.
+
+SAS -> spark.conf.set("fs.azure.account.auth.type.<storage-account>.dfs.core.windows.net", "SAS")
+spark.conf.set("fs.azure.sas.token.provider.type.<storage-account>.dfs.core.windows.net", "org.apache.hadoop.fs.azurebfs.sas.FixedSASTokenProvider")
+spark.conf.set("fs.azure.sas.fixed.token.<storage-account>.dfs.core.windows.net", dbutils.secrets.get(scope="<scope>", key="<sas-token-key>"))
+
+Azure Service Principal -> 
+spark.hadoop.fs.azure.account.auth.type.<storage-account>.dfs.core.windows.net OAuth
+spark.hadoop.fs.azure.account.oauth.provider.type.<storage-account>.dfs.core.windows.net org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider
+spark.hadoop.fs.azure.account.oauth2.client.id.<storage-account>.dfs.core.windows.net <application-id>
+spark.hadoop.fs.azure.account.oauth2.client.secret.<storage-account>.dfs.core.windows.net {{secrets/<secret-scope>/<service-credential-key>}}
+spark.hadoop.fs.azure.account.oauth2.client.endpoint.<storage-account>.dfs.core.windows.net https://login.microsoftonline.com/<directory-id>/oauth2/token
+
+You can use spark.conf.set in notebooks, as shown in the following example:
+service_credential = dbutils.secrets.get(scope="<secret-scope>",key="<service-credential-key>")
+
+spark.conf.set("fs.azure.account.auth.type.<storage-account>.dfs.core.windows.net", "OAuth")
+spark.conf.set("fs.azure.account.oauth.provider.type.<storage-account>.dfs.core.windows.net", "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider")
+spark.conf.set("fs.azure.account.oauth2.client.id.<storage-account>.dfs.core.windows.net", "<application-id>")
+spark.conf.set("fs.azure.account.oauth2.client.secret.<storage-account>.dfs.core.windows.net", service_credential)
+spark.conf.set("fs.azure.account.oauth2.client.endpoint.<storage-account>.dfs.core.windows.net", "https://login.microsoftonline.com/<directory-id>/oauth2/token")
+
+
+Access Azure storage
+Once you have properly configured credentials to access your Azure storage container, you can interact with resources in the storage account using URIs. Databricks recommends using the abfss driver for greater security.
+
+spark.read.load("abfss://<container-name>@<storage-account-name>.dfs.core.windows.net/<path-to-data>")
+
+dbutils.fs.ls("abfss://<container-name>@<storage-account-name>.dfs.core.windows.net/<path-to-data>")
+
+CREATE TABLE <database-name>.<table-name>;
+
+COPY INTO <database-name>.<table-name>
+FROM 'abfss://container@storageAccount.dfs.core.windows.net/path/to/folder'
+FILEFORMAT = CSV
+COPY_OPTIONS ('mergeSchema' = 'true');
+
+Azure Data Lake Storage Gen2 known issues
+If you try accessing a storage container created through the Azure portal, you might receive the following error:
+
+StatusCode=404
+StatusDescription=The specified filesystem does not exist.
+ErrorCode=FilesystemNotFound
+ErrorMessage=The specified filesystem does not exist.
+
+When a hierarchical namespace is enabled, you don’t need to create containers through Azure portal. If you see this issue, delete the Blob container through Azure portal. After a few minutes, you can access the container. Alternatively, you can change your abfss URI to use a different container, as long as this container is not created through Azure portal.
+
+There are four ways of accessing Azure Data Lake Storage Gen2 in Databricks:
+
+Mount an Azure Data Lake Storage Gen2 filesystem to DBFS using a service principal and OAuth 2.0.
+Use a service principal directly.
+Use the Azure Data Lake Storage Gen2 storage account access key directly.
+Pass your Azure Active Directory credentials, also known as a credential passthrough.
+
+Let’s use option 3.
+
+1. This option is the most straightforward and requires you to run the command, setting the data lake context at the start of every notebook session. Databricks Secrets are used when setting all these configurations
+
+2. To set the data lake context, create a new Python notebook, and paste the following code into the first cell:
+
+spark.conf.set(
+"fs.azure.account.key.<storage-account-name>.dfs.core.windows.net",
+""
+)
+3. Replace ‘<storage-account-name>’ with your storage account name.
+
+4. In between the double quotes on the third line, we will be pasting in an access key for the storage account that we grab from Azure
+
+5. Navigate to your storage account in the Azure Portal and click on ‘Access keys’ under ‘Settings’.
+
+Click the copy button, and paste the key1 Key in between the double quotes in your cell
+
+7. Attach your notebook to the running cluster and execute the cell. If it worked, you should see the following:
+
+If your cluster is shut down, or if you detach the notebook from a cluster, you will have to re-run this cell to access the data.
+
+9. Copy the below command in a new cell, filling in your relevant details, and you should see a list containing the file you updated.
+
+dbutils.fs.ls("abfss://<file-system-name>@<storage-account-
+name>.dfs.core.windows.net/<directory-name>")
+
+Load Data into a Spark DataFrame from the Data Lake
+Towards the end of the Error! Reference source not found. section, we uploaded a sample CSV file into ADLS.  We will now see how we can read this CSV file from Spark.
+
+We can get the file location from the dbutils.fs.ls command we ran earlier – see the full path as the output.
+
+Run the command given below:
+
+#set the data lake file location:
+file_location = "abfss://adbdemofilesystem@adlsgen2demodatalake.dfs.core.windows.net/raw/covid
+19/johns-hopkins-covid-19-daily-dashboard-cases-by-states.csv"
+ 
+#read in the data to dataframe df
+df = spark.read.format("csv").option("inferSchema", "true").option("header",
+"true").option("delimiter",",").load(file_location)
+ 
+#display the dataframe
+display(df)
+
+Create a table on top of the data in the data lake
+In the previous section, we loaded the data from a CSV file to a DataFrame so that it can be accessed using python spark API.  Now, we will create a Hive table in spark with data in an external location (ADLS), so that the data can be access using SQL instead of python code.
+
+In a new cell, copy the following command:
+
+%sql
+CREATE DATABASE covid_research
+
+Next, create the table pointing to the proper location in the data lake.
+
+%sql
+CREATE TABLE IF NOT EXISTS covid_research.covid_data
+USING CSV
+LOCATION 'abfss://adbdemofilesystem@adlsgen2demodatalake.dfs.core.windows.net/raw/covid
+19/johns-hopkins-covid-19-daily-dashboard-cases-by-states.csv'
+
+Run a select statement against the table.
+
+%sql
+
+select * 
+from covid_research.covid_data
+
+PROCESS OF MOUNTING AZURE DATA LAKE STORAGE FROM DATABRICKS.
+===========================================================================
+Access Azure data lake files from notebook by passing SAS token.
+Notebook has to be authorized to access your file.
+
+files adl -- notebook
+sas token -- not a recommended way because it involves hardcoding the token which will reveal the access token .
+
+What is mounting?
+Pointer to data lake from data bricks as if they are residing in databricks space itself.
+
+
+Steps:
+1.app registration --> Go to home --> new registration --> Register . We will get two things -- a) an application(client) Id and b) a tenant Id .
+copy it down. Whenever you are registering an app you are creating a service principal.(name of the app 'app01')
+
+Generate a secret for the application . --> Go to Certificates & secrets --> add a new client secret. Copy it down.
+
+Create a role for the app created (app name 'app01') -- > Read or write or modification or admin role. Go to home --> Resource group(associated with the data lake) --> Access control(IAM) --> Add role assignment (storage blob data contributor) -->Assign access to Service principal ('app01')
+
+
+2.store secrets in key vault -->Add secrets to the key vault. Go to Key Vaults.--> create --> give name('azkv24') --> choose resource group.
+Under the newly created key vault --> Secrets --> Generate/import --> we need to add 3 secrets .--> i) tenant Id.--> give value .
+Generate/import --> we need to add 3 secrets .--> ii) app Id.--> give value .
+Generate/import --> we need to add 3 secrets .--> iii) clientsecret.--> give value 
+
+Copy the Vault URL and the Resource Id to a notepad.
+
+
+3.create scope in databricks(to be done from Azure Databricks workspace) --> let databricks access Azure key vault to get the secrets stored there.--> a)modify the url to open the Secret Scope(Go to https://adb-1555684736761417.17.azuredatabricks.net#secrets/createScope. Replace <databricks-instance> with the workspace URL of your Azure Databricks deployment. This URL is case sensitive (scope in createScope must be uppercase).
+b)Give a new scope name-- 'secret02' --> All Users--> Provide the Azure key vault url and Resource ID (copied earlier).--> create.
+
+
+4. mount data lake.--> 
+
+# Define the variable used for creating connection strings.
+
+adlsAccountName= "mystorage24"
+adlsContainerName="democontainer"
+adlsFolderName="Input"
+mountPoint="/mnt/files"
+
+# Application (client) Id
+applicationID=dbutils.secrets.get(scope="Secret02",key="appid")
+
+#Application (client) secret key
+authenticationKey= dbutils.secrets.get(scope="Secret02", key="clientsecret")
+
+#Directory (tenant) ID
+
+tenantId= dbutils.secrets.get(scope="Secret02" , key="tenantId")
+
+endpoint="https://login.microsoftonline.com/" + tenantId + "/oauth2/token"
+source= "abfss://" + adlsContainerName + "@" + adlsAccountName + ".dfs.core.windows.net/" + adlsFolderName
+
+# Connecting using Service Principal secrets and OAuth
+
+configs= ("fs.azure.account.auth.type": "OAuth",
+          "fs.azure.account.oauth.provider.type": "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider",
+          "fs.azure.account.oauth2.client.id": applicationId,
+          "fs.azure.account.oauth2.client.secret": authenticationKey,
+           "fs.azure.account.oauth2.client.endpoint": endpoint)
+
+# Mounting ADLS storage to DBFS 
+# Mount only if the directory is not already mounted
+
+if not any (mount.mountPoint == mountPoint  for mount in dbutils.fs.mounts()):
+       dbutils.fs.mount (
+          source = source,
+          mount_point = mountPoint,
+          extra_configs= configs)
+
+#List files
+%fs
+ls "mnt/files"
+
+TRANSFORMATIONS
+===================
+
+A. Replace null with value.
+=============================
+
+In PySpark , fillna() from DataFrame class or fill() from DataFrameNaFunctions is used to replace null NULL / None values on all or selected multiple
+columns with either zero(0) , empty string , space or any constant literal values.
+
+While working on PySpark DataFrame we often need to replace null values since certain operations on null values return errors. Hence, we need to graciously handle nulls as the first step before processing. Also, while writing to a file, it’s always best practice to replace null values, not doing this results in nulls on the output file.
+
+As part of the cleanup, sometimes you may need to Drop Rows with NULL/None Values in PySpark DataFrame and Filter Rows by checking IS NULL/NOT NULL conditions.
+
+a) Read a csv into PySpark DataFrame file. Note that the reading process automatically assigns null values for missing data.
+
+# Create SparkSession and read CSV
+
+from pyspark.sql import SparkSession
+spark= SparkSession.builder \
+       .master("local[1]") \
+       .appName("SparkByExamples.com") \
+       .getOrCreate()
+
+filePath="resources/small_zipcode.csv"
+df=spark.read.options(header='true', inferSchema='true')\
+                   .csv(filePath)
+
+df.printSchema()
+df.show(truncate=False)
+
+This yields the below output. Note that the columns city, and population have null values.
+
+PySpark provides DataFrame.fillna() and DataFrameNaFunctions.fill() to replace NULL/None values. These two are aliases of each other and returns the same results.
+
+#PySpark Replace NULL/None Values with Zero (0)
+
+# Replace 0 for null for all integer columns.
+df.na.fill(value=0).show()
+
+# Replace 0 for null on only population column
+df.na.fill(value=0, subset=["population"]).show()
+
+#PySpark Replace Null/None Value with Empty String
+df.na.fill("").show(false)
+
+#Now, let’s replace NULLs on specific columns, below example replace a column type with an empty string and a column city with the value “unknown”.
+
+df.na.fill("unknown",["city"])\
+   .na.fill("",["type"]).show()
+
+#Alternatively, write the above statement as below.
+
+df.na.fill({"city": "unknown", "type": ""}) \
+    .show()
+
+#Complete Code
+#Below is the complete code with a python example. You can use it by copying it from here or using GitHub to download the source code.
+
+from pyspark.sql import SparkSession
+spark = SparkSession.builder \
+    .master("local[1]") \
+    .appName("SparkByExamples.com") \
+    .getOrCreate()
+
+filePath="resources/small_zipcode.csv"
+df = spark.read.options(header='true', inferSchema='true') \
+          .csv(filePath)
+
+df.printSchema()
+df.show(truncate=False)
+
+
+df.fillna(value=0).show()
+df.fillna(value=0,subset=["population"]).show()
+df.na.fill(value=0).show()
+df.na.fill(value=0,subset=["population"]).show()
+
+
+df.fillna(value="").show()
+df.na.fill(value="").show()
+
+df.fillna("unknown",["city"]) \
+    .fillna("",["type"]).show()
+
+df.fillna({"city": "unknown", "type": ""}) \
+    .show()
+
+df.na.fill("unknown",["city"]) \
+    .na.fill("",["type"]).show()
+
+df.na.fill({"city":"unknown", "type": ""}) \
+    .show()
+
+Q1. Can I fill in missing values with different replacement values for different columns?
+we can specify different replacement values for different columns when using fillna().
+Example
+df.fillna({"zipcode":0,"population":50000}) will fill in missing values in the “zipcode” column with 0 and in the “population” column with 50000.
+
+Q2.Are there any performance considerations while using fillna() on large DataFrames?
+Filling missing values with fillna() can be resource-intensive for large DataFrames. It’s essential to consider the performance impact, especially when working with big data. Optimize your code and use appropriate caching or storage strategies to improve performance.
+
+B. Standardize ONE column in Spark using StandardScaler?
+
+Just use plain aggregation:
+
+from pyspark.sql.functions import stddev, mean, col
+
+sample17 = spark.createDataFrame([(1, ), (2, ), (3, )]).toDF("age")
+
+(sample17
+  .select(mean("age").alias("mean_age"), stddev("age").alias("stddev_age"))
+  .crossJoin(sample17)
+  .withColumn("age_scaled" , (col("age") - col("mean_age")) / col("stddev_age")))
+
+OR
+
+mean_age, sttdev_age = sample17.select(mean("age"), stddev("age")).first()
+sample17.withColumn("age_scaled", (col("age") - mean_age) / sttdev_age)
+
+#How to replace part of a string with another string, replace all columns, change values conditionally, replace values from a python dictionary, replace column value from another DataFrame column e.t.c
+
+# Imports
+# Create sample Data
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.master("local[1]").appName("SparkByExamples.com").getOrCreate()
+address = [(1,"14851 Jeffrey Rd","DE"),
+    (2,"43421 Margarita St","NY"),
+    (3,"13111 Siemon Ave","CA")]
+df =spark.createDataFrame(address,["id","address","state"])
+df.show()
+
+a) PySpark Replace String Column Values -
+
+By using PySpark SQL function regexp_replace() you can replace a column value with a string for another string/substring. regexp_replace() uses Java regex for matching, if the regex does not match it returns an empty string, the below example replaces the street name Rd value with Road string on address column.
+
+#Replace part of string with another string
+from pyspark.sql.functions import regexp_replace
+df.withColumn('address', regexp_replace('address', 'Rd', 'Road')) \
+  .show(truncate=False)
+
+#Replace Column Values Conditionally
+In the above example, we just replaced Rd with Road, but not replaced St and Ave values, let’s see how to replace column values conditionally in PySpark Dataframe by using when().otherwise() SQL condition function.
+
+from pyspark.sql.functions import when
+df.withColumn('address', 
+    when(df.address.endswith('Rd'),regexp_replace(df.address,'Rd','Road')) \
+   .when(df.address.endswith('St'),regexp_replace(df.address,'St','Street')) \
+   .when(df.address.endswith('Ave'),regexp_replace(df.address,'Ave','Avenue')) \
+   .otherwise(df.address)) \
+   .show(truncate=False)
+
+#Replace Column Value with Dictionary (map)
+You can also replace column values from the python dictionary (map). In the below example, we replace the string value of the state column with the full abbreviated name from a dictionary key-value pair, in order to do so I use PySpark map() transformation to loop through each row of DataFrame.
+
+#Replace values from Dictionary
+stateDic={'CA':'California','NY':'New York','DE':'Delaware'}
+df2=df.rdd.map(lambda x: 
+    (x.id,x.address,stateDic[x.state]) 
+    ).toDF(["id","address","state"])
+df2.show()
+
+#Replace Column Value Character by Character
+By using translate() string function you can replace character by character of DataFrame column value. In the below example, every character of 1 is replaced with A, 2 replaced with B, and 3 replaced with C on the address column.
+
+#Using translate to replace character by character
+from pyspark.sql.functions import translate
+df.withColumn('address', translate('address', '123', 'ABC')) \
+  .show(truncate=False)
+
+#+---+------------------+-----+
+#|id |address           |state|
+#+---+------------------+-----+
+#|1  |A485A Jeffrey Rd  |DE   |
+#|2  |4C4BA Margarita St|NY   |
+#|3  |ACAAA Siemon Ave  |CA   |
+#+---+------------------+----
+
+#Replace Column with Another Column Value.
+
+By using expr() and regexp_replace() you can replace column value with a value from another DataFrame column. In the below example, we match the value from col2 in col1 and replace with col3 to create new_column. Use expr() to provide SQL like expressions and is used to refer to another column to perform operations.
+
+#Replace column with another column
+from pyspark.sql.functions import expr
+df = spark.createDataFrame(
+   [("ABCDE_XYZ", "XYZ","FGH")], 
+    ("col1", "col2","col3")
+  )
+df.withColumn("new_column",
+              expr("regexp_replace(col1, col2, col3)")
+              .alias("replaced_value")
+              ).show()
+
+
++---------+----+----+----------+
+#|     col1|col2|col3|new_column|
+#+---------+----+----+----------+
+#|ABCDE_XYZ| XYZ| FGH| ABCDE_FGH|
+#+---------+----+----+----------+
+
+#Using overlay() Function
+Replace column value with a string value from another column.
+
+#Overlay
+from pyspark.sql.functions import overlay
+df = spark.createDataFrame([("ABCDE_XYZ", "FGH")], ("col1", "col2"))
+df.select(overlay("col1", "col2", 7).alias("overlayed")).show()
+
+#+---------+
+#|overlayed|
+#+---------+
+#|ABCDE_FGH|
+
+pyspark.sql.DataFrame.replace
+
+Returns a new DataFrame replacing a value with another value. DataFrame.replace() and DataFrameNaFunctions.replace() are aliases of each other.
+
+df = spark.createDataFrame([
+    (10, 80, "Alice"),
+    (5, None, "Bob"),
+    (None, 10, "Tom"),
+    (None, None, None)],
+    schema=["age", "height", "name"])
+
+#Replace 10 to 20 in all columns.
+df.na.replace(10, 20).show()
+
+#Replace ‘Alice’ to null in all columns.
+
+df.na.replace('Alice', None).show()
+
+#Replace ‘Alice’ to ‘A’, and ‘Bob’ to ‘B’ in the ‘name’ column.
+
+df.na.replace(['Alice', 'Bob'], ['A', 'B'], 'name').show()
+
+C. AGGREGATIONS
+
+pyspark.sql.DataFrame.rollup
+
+Create a multi-dimensional rollup for the current DataFrame using the specified columns, so we can run aggregation on them.
+
+df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
+df.rollup("name", df.age).count().orderBy("name", "age").show()
+
+D. REPARTITIONS
+pyspark.sql.DataFrame.repartition
+
+Returns a new DataFrame partitioned by the given partitioning expressions. The resulting DataFrame is hash partitioned.
+
+df = spark.createDataFrame(
+    [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+
+#Repartition the data into 10 partitions.
+
+df.repartition(10).rdd.getNumPartitions()
+
+#Repartition the data into 7 partitions by ‘age’ column.
+
+df.repartition(7, "age").rdd.getNumPartitions()
+
+#Repartition the data into 7 partitions by ‘age’ and ‘name columns.
+
+df.repartition(3, "name", "age").rdd.getNumPartitions()
+
+E. How to Remove Special Characters from Column
+
+Use the following syntax to remove special characters from a column in a PySpark DataFrame:
+
+from pyspark.sql.functions import *
+
+#remove all special characters from each string in 'team' column
+df_new = df.withColumn('team', regexp_replace('team', '[^a-zA-Z0-9]', ''))
+
+Example: How to Remove Special Characters from Column in PySpark
+Suppose we have the following PySpark DataFrame that contains information about various basketball players:
+
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.getOrCreate()
+
+#define data
+data = [['Mavs^', 18], 
+        ['Ne%ts', 33], 
+        ['Hawk**s', 12], 
+        ['Mavs@', 15], 
+        ['Hawks!', 19],
+        ['(Cavs)', 24],
+        ['Magic', 28]] 
+  
+#define column names
+columns = ['team', 'points'] 
+
+#create dataframe using data and column names
+df = spark.createDataFrame(data, columns) 
+  
+#view dataframe
+df.show()
+
+#Notice that several of the team names contain special characters.
+
+#We can use the following syntax to remove all special characters from each string in the team column of the DataFrame:
+
+from pyspark.sql.functions import *
+
+#remove all special characters from each string in 'team' column
+df_new = df.withColumn('team', regexp_replace('team', '[^a-zA-Z0-9]', ''))
+
+#view new DataFrame
+df_new.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+         
+       
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Raw(Bronze) layer  --> ADLS Gen2.
+Silver layer --> Azure Databricks.
+Gold layer --> Azure Synapse Analytics. 
+---------------------------------------------------------------------------------------------------------------------------------------------------
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Data from the multiple source systems(Upstream applications) got ingested into the ADLS Gen2 storage using Azure DataFactory and Streaming Analytics pipelines from where it moved to the Azure Databricks Delta tables. Data was stored in the ADLS Gen2 using date and timestamp hierarchical namespace. Data mostly in CSV and Parquet format.
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+Two pipelines from ADLS Gen2 to Azure Databricks -- One for full load(month end) and another one for incremental, partial load(daily).
+A databricks pipeline then carried this cleansed and processed data to the dedicated SQL Pool tables in Azure Synapse .
+Another pipeline carried raw data directly from ADLS Gen2 to the Spark SQL Pool tables(Global Managed Tables) in Azure Synapse.
+This data got joined with the processed data (processed earlier by ADB) on keys and got stored and got modelled and presented in PowerBI.
+Data is also ingested directly into Azure Synapse Analytics Serverless and Spark SQL Pools from ADLS Gen2 using Polybase.
+This type of raw data(bronze) is mainly used for data modelling and dashboard presentation of Near Real Time data in PowerBI.
+This raw data(bronze) is also used for joining and lookup operations with the already cleansed data from the Azure Databricks.
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+From ADLS Gen2 to Azure DataBricks full load as well as partial load was done.
+From Azure Databricks to the Azure Synapse Dedicated SQL Pool(relational tables with columnar storage.It leverages Azure Storage.Once data is stored, you can run analytics at massive scale. Compared to traditional database systems, analysis queries finish in seconds instead of minutes, or hours instead of days.) full load as well as incremental load was done using the two pipelines(one for full and another for partial load using Spark Connector for  SQL Server and Azure SQL Database using Microsoft Entra ID authentication).The Partial load pipeline executed daily while the full load executed only once during the month-end. 
+Azure Databricks - For Data cleansing and In order to reduce time, IO and ensure data accuracy for full load and delta load, certain operations such as out-of-range data(flag checking for greater than > 5 years data),correction of misaligned data , truncate and trimming of outliers, special characters , white spaces , string formatting, removal of duplicates, PII data encryption was done using both SQL and Python. We also entertained client requests like converting generic timezones to Australia/ NewZealand timezone as also converting the date/ timestamp format as per client request.
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+Before you begin- 
+1) Create a user for loading data - 
+.................................................
+Connect as the server admin so you can create logins and users. Use these steps to create a login and user called LoaderRC20. Then assign the user to the staticrc20 resource class.
+
+a)In SSMS, right-select master to show a dropdown menu, and choose New Query. A new query window opens.
+
+b)In the query window, enter these T-SQL commands to create a login and user named LoaderRC20, substituting your own strong password.
+SQL : CREATE LOGIN LoaderRC20 WITH PASSWORD = '<strong password here>';
+CREATE USER LoaderRC20 FOR LOGIN LoaderRC20;
+
+c) Select Execute.
+d)Right-click mySampleDataWarehouse, and choose New Query. A new query Window opens.
+e)Enter the following T-SQL commands to create a database user named LoaderRC20 for the LoaderRC20 login. The second line grants the new user CONTROL permissions on the new data warehouse. These permissions are similar to making the user the owner of the database. The third line adds the new user as a member of the staticrc20 resource class.
+SQL : CREATE USER LoaderRC20 FOR LOGIN LoaderRC20;
+GRANT CONTROL ON DATABASE::[mySampleDataWarehouse] to LoaderRC20;
+EXEC sp_addrolemember 'staticrc20', 'LoaderRC20';
+
+d)Select Execute.
+
+2) Connect to the server as the loading user -
+   .......................................................
+a)The first step toward loading data is to login as LoaderRC20.
+
+b)In Object Explorer, select the Connect dropdown menu and select Database Engine. The Connect to Server dialog box appears.
+
+c)Enter the fully qualified server name, and enter LoaderRC20 as the Login. Enter your password for LoaderRC20.
+
+d)Select Connect.
+
+e)When your connection is ready, you'll see two server connections in Object Explorer. One connection as ServerAdmin and one connection as LoaderRC20.
+
+3) Create tables for the sample data-
+................................................
+You're ready to begin the process of loading data into your new data warehouse. This part of the tutorial shows you how to use the COPY statement to load the New York City taxi cab dataset from an Azure Storage blob.
+a)In the previous section, you logged into your data warehouse as LoaderRC20. In SSMS, right-click your LoaderRC20 connection and select New Query. A new query window appears.
+
+b)Compare your query window to the previous image. Verify your new query window is running as LoaderRC20 and performing queries on your MySampleDataWarehouse database. Use this query window to perform all of the loading steps.
+
+c)Run the following T-SQL statements to create the tables:
+CREATE TABLE [dbo].[Date]
+(
+    [DateID] int NOT NULL,
+    [Date] datetime NULL,
+    [DateBKey] char(10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [DayOfMonth] varchar(2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [DaySuffix] varchar(4) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [DayName] varchar(9) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [DayOfWeek] char(1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [DayOfWeekInMonth] varchar(2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [DayOfWeekInYear] varchar(2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [DayOfQuarter] varchar(3) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [DayOfYear] varchar(3) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [WeekOfMonth] varchar(1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [WeekOfQuarter] varchar(2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [WeekOfYear] varchar(2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Month] varchar(2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [MonthName] varchar(9) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [MonthOfQuarter] varchar(2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Quarter] char(1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [QuarterName] varchar(9) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Year] char(4) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [YearName] char(7) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [MonthYear] char(10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [MMYYYY] char(6) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [FirstDayOfMonth] date NULL,
+    [LastDayOfMonth] date NULL,
+    [FirstDayOfQuarter] date NULL,
+    [LastDayOfQuarter] date NULL,
+    [FirstDayOfYear] date NULL,
+    [LastDayOfYear] date NULL,
+    [IsHolidayUSA] bit NULL,
+    [IsWeekday] bit NULL,
+    [HolidayUSA] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    CLUSTERED COLUMNSTORE INDEX
+);
+
+CREATE TABLE [dbo].[Geography]
+(
+    [GeographyID] int NOT NULL,
+    [ZipCodeBKey] varchar(10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [County] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [City] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [State] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Country] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [ZipCode] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    CLUSTERED COLUMNSTORE INDEX
+);
+
+CREATE TABLE [dbo].[HackneyLicense]
+(
+    [HackneyLicenseID] int NOT NULL,
+    [HackneyLicenseBKey] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [HackneyLicenseCode] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    CLUSTERED COLUMNSTORE INDEX
+);
+
+CREATE TABLE [dbo].[Medallion]
+(
+    [MedallionID] int NOT NULL,
+    [MedallionBKey] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [MedallionCode] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    CLUSTERED COLUMNSTORE INDEX
+);
+
+CREATE TABLE [dbo].[Time]
+(
+    [TimeID] int NOT NULL,
+    [TimeBKey] varchar(8) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [HourNumber] tinyint NOT NULL,
+    [MinuteNumber] tinyint NOT NULL,
+    [SecondNumber] tinyint NOT NULL,
+    [TimeInSecond] int NOT NULL,
+    [HourlyBucket] varchar(15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [DayTimeBucketGroupKey] int NOT NULL,
+    [DayTimeBucket] varchar(100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    CLUSTERED COLUMNSTORE INDEX
+);
+
+CREATE TABLE [dbo].[Trip]
+(
+    [DateID] int NOT NULL,
+    [MedallionID] int NOT NULL,
+    [HackneyLicenseID] int NOT NULL,
+    [PickupTimeID] int NOT NULL,
+    [DropoffTimeID] int NOT NULL,
+    [PickupGeographyID] int NULL,
+    [DropoffGeographyID] int NULL,
+    [PickupLatitude] float NULL,
+    [PickupLongitude] float NULL,
+    [PickupLatLong] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [DropoffLatitude] float NULL,
+    [DropoffLongitude] float NULL,
+    [DropoffLatLong] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [PassengerCount] int NULL,
+    [TripDurationSeconds] int NULL,
+    [TripDistanceMiles] float NULL,
+    [PaymentType] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [FareAmount] money NULL,
+    [SurchargeAmount] money NULL,
+    [TaxAmount] money NULL,
+    [TipAmount] money NULL,
+    [TollsAmount] money NULL,
+    [TotalAmount] money NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    CLUSTERED COLUMNSTORE INDEX
+);
+
+CREATE TABLE [dbo].[Weather]
+(
+    [DateID] int NOT NULL,
+    [GeographyID] int NOT NULL,
+    [PrecipitationInches] float NOT NULL,
+    [AvgTemperatureFahrenheit] float NOT NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    CLUSTERED COLUMNSTORE INDEX
+);
+
+4)Load the data into your data warehouse -
+.......................................................
+This section uses the COPY statement to load the sample data from Azure Storage Blob.
+a)Run the following statements to load the data:
+COPY INTO [dbo].[Date]
+FROM 'https://nytaxiblob.blob.core.windows.net/2013/Date'
+WITH
+(
+    FILE_TYPE = 'CSV',
+    FIELDTERMINATOR = ',',
+    FIELDQUOTE = ''
+)
+OPTION (LABEL = 'COPY : Load [dbo].[Date] - Taxi dataset');
+
+
+COPY INTO [dbo].[Geography]
+FROM 'https://nytaxiblob.blob.core.windows.net/2013/Geography'
+WITH
+(
+    FILE_TYPE = 'CSV',
+    FIELDTERMINATOR = ',',
+    FIELDQUOTE = ''
+)
+OPTION (LABEL = 'COPY : Load [dbo].[Geography] - Taxi dataset');
+
+COPY INTO [dbo].[HackneyLicense]
+FROM 'https://nytaxiblob.blob.core.windows.net/2013/HackneyLicense'
+WITH
+(
+    FILE_TYPE = 'CSV',
+    FIELDTERMINATOR = ',',
+    FIELDQUOTE = ''
+)
+OPTION (LABEL = 'COPY : Load [dbo].[HackneyLicense] - Taxi dataset');
+
+COPY INTO [dbo].[Medallion]
+FROM 'https://nytaxiblob.blob.core.windows.net/2013/Medallion'
+WITH
+(
+    FILE_TYPE = 'CSV',
+    FIELDTERMINATOR = ',',
+    FIELDQUOTE = ''
+)
+OPTION (LABEL = 'COPY : Load [dbo].[Medallion] - Taxi dataset');
+
+COPY INTO [dbo].[Time]
+FROM 'https://nytaxiblob.blob.core.windows.net/2013/Time'
+WITH
+(
+    FILE_TYPE = 'CSV',
+    FIELDTERMINATOR = ',',
+    FIELDQUOTE = ''
+)
+OPTION (LABEL = 'COPY : Load [dbo].[Time] - Taxi dataset');
+
+COPY INTO [dbo].[Weather]
+FROM 'https://nytaxiblob.blob.core.windows.net/2013/Weather'
+WITH
+(
+    FILE_TYPE = 'CSV',
+    FIELDTERMINATOR = ',',
+    FIELDQUOTE = '',
+    ROWTERMINATOR='0X0A'
+)
+OPTION (LABEL = 'COPY : Load [dbo].[Weather] - Taxi dataset');
+
+COPY INTO [dbo].[Trip]
+FROM 'https://nytaxiblob.blob.core.windows.net/2013/Trip2013'
+WITH
+(
+    FILE_TYPE = 'CSV',
+    FIELDTERMINATOR = '|',
+    FIELDQUOTE = '',
+    ROWTERMINATOR='0X0A',
+    COMPRESSION = 'GZIP'
+)
+OPTION (LABEL = 'COPY : Load [dbo].[Trip] - Taxi dataset');
+
+b)View your data as it loads. You're loading several GBs of data and compressing it into highly performant clustered columnstore indexes. Run the following query that uses a dynamic management views (DMVs) to show the status of the load.
+SELECT  r.[request_id]
+,       r.[status]
+,       r.resource_class
+,       r.command
+,       sum(bytes_processed) AS bytes_processed
+,       sum(rows_processed) AS rows_processed
+FROM    sys.dm_pdw_exec_requests r
+              JOIN sys.dm_pdw_dms_workers w
+                     ON r.[request_id] = w.request_id
+WHERE [label] = 'COPY : Load [dbo].[Date] - Taxi dataset' OR
+    [label] = 'COPY : Load [dbo].[Geography] - Taxi dataset' OR
+    [label] = 'COPY : Load [dbo].[HackneyLicense] - Taxi dataset' OR
+    [label] = 'COPY : Load [dbo].[Medallion] - Taxi dataset' OR
+    [label] = 'COPY : Load [dbo].[Time] - Taxi dataset' OR
+    [label] = 'COPY : Load [dbo].[Weather] - Taxi dataset' OR
+    [label] = 'COPY : Load [dbo].[Trip] - Taxi dataset'
+and session_id <> session_id() and type = 'WRITER'
+GROUP BY r.[request_id]
+,       r.[status]
+,       r.resource_class
+,       r.command;
+c)View all system queries.
+SELECT * FROM sys.dm_pdw_exec_requests;
+
+d)Enjoy your data nicely loaded into your data warehouse.
+
+5)Clean up resources-
+.........................
+You are being charged for compute resources and data that you loaded into your data warehouse. These are billed separately.
+
+If you want to keep the data in storage, you can pause compute when you aren't using the data warehouse. By pausing compute, you will only be charge for data storage and you can resume the compute whenever you're ready to work with the data.
+If you want to remove future charges, you can delete the data warehouse.
+
+Follow these steps to clean up resources as you desire.
+
+a)Sign in to the Azure portal, and select your data warehouse.
+
+b)To pause compute, select the Pause button. When the data warehouse is paused, you see a Start button. To resume compute, select Start.
+
+c)To remove the data warehouse so you won't be charged for compute or storage, select Delete.
+
+d)To remove the server you created, select mynewserver-20180430.database.windows.net in the previous image, and then select Delete. Be careful with this as deleting the server deletes all databases assigned to the server.
+
+e)To remove the resource group, select myResourceGroup, and then select Delete resource group.
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+Azure Synapse Analytics Dedicated SQL Pool(Using Stored Procedure and Merge):  We also did other types of data verifications- (for Consistency- In Dimension table HM_card_bnpl_customer_hdr Mr. John Doe and John Doe are not the same so transforming into a consistent, standard format,In Dimension table HM_card_bnpl_trans_date converting generic timezones to Australia/ NewZealand timezone as also converting the date/ timestamp format, In Fact table HM_card_bnpl_sales converting generic currencies into Australian dollar $ and its equivalent US $, Completeness - find and replace missing values such as null, void ,placeholder values "like 999 or minus 1" with a meaningful value and Currency- In Dimension table HM_card_bnpl_cust_address , data was matched with a "change-of-address" database and updated when required).
+We also did pre-computation on joins and aggregations on data using Materialized Views.
+
+
+This transformed & prepared(gold) data in Azure Synapse Dedicated SQL Pool is used for data modelling and dashboard presentation of the batch data in PowerBI.
+
+ This type of raw data(bronze) is mainly used for data modelling and dashboard presentation of NRT data in PowerBI.
+
+There are also Micro-batches which run parallel to the main Pipeline. These are coded in Python and they extract metadata or Pipeline error log information and store them in a SQL Database from where they are stored into a file storage.
+
+
