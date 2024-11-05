@@ -73,3 +73,101 @@ Run a select statement against the table.
 select * 
 from covid_research.covid_data
 
+PROCESS OF MOUNTING AZURE DATA LAKE STORAGE FROM DATABRICKS.
+===========================================================================
+
+Access Azure data lake files from notebook by passing SAS token.
+Notebook has to be authorized to access your file.
+
+files adl -- notebook
+sas token -- not a recommended way because it involves hardcoding the token which will reveal the access token .
+
+What is mounting?
+Pointer to data lake from data bricks as if they are residing in databricks space itself.
+
+
+Steps:
+1.app registration --> Go to home --> new registration --> Register . We will get two things -- a) an application(client) Id and b) a tenant Id .
+copy it down. Whenever you are registering an app you are creating a service principal.(name of the app 'app01')
+
+Generate a secret for the application . --> Go to Certificates & secrets --> add a new client secret. Copy it down.
+
+Create a role for the app created (app name 'app01') -- > Read or write or modification or admin role. Go to home --> Resource group(associated with the data lake) --> Access control(IAM) --> Add role assignment (storage blob data contributor) -->Assign access to Service principal ('app01')
+
+
+2.store secrets in key vault -->Add secrets to the key vault. Go to Key Vaults.--> create --> give name('azkv24') --> choose resource group.
+Under the newly created key vault --> Secrets --> Generate/import --> we need to add 3 secrets .--> i) tenant Id.--> give value .
+Generate/import --> we need to add 3 secrets .--> ii) app Id.--> give value .
+Generate/import --> we need to add 3 secrets .--> iii) clientsecret.--> give value 
+
+Copy the Vault URL and the Resource Id to a notepad.
+
+
+3.create scope in databricks(to be done from Azure Databricks workspace) --> let databricks access Azure key vault to get the secrets stored there.--> a)modify the url to open the Secret Scope(Go to https://adb-1555684736761417.17.azuredatabricks.net#secrets/createScope. Replace <databricks-instance> with the workspace URL of your Azure Databricks deployment. This URL is case sensitive (scope in createScope must be uppercase).
+b)Give a new scope name-- 'secret02' --> All Users--> Provide the Azure key vault url and Resource ID (copied earlier).--> create.
+
+
+
+
+4. mount data lake.--> 
+
+# Define the variable used for creating connection strings.
+
+adlsAccountName= "mystorage24"
+adlsContainerName="democontainer"
+adlsFolderName="Input"
+mountPoint="/mnt/files"
+
+# Application (client) Id
+applicationID=dbutils.secrets.get(scope="Secret02",key="appid")
+
+#Application (client) secret key
+authenticationKey= dbutils.secrets.get(scope="Secret02", key="clientsecret")
+
+#Directory (tenant) ID
+
+tenantId= dbutils.secrets.get(scope="Secret02" , key="tenantId")
+
+endpoint="https://login.microsoftonline.com/" + tenantId + "/oauth2/token"
+source= "abfss://" + adlsContainerName + "@" + adlsAccountName + ".dfs.core.windows.net/" + adlsFolderName
+
+# Connecting using Service Principal secrets and OAuth
+
+configs= ("fs.azure.account.auth.type": "OAuth",
+          "fs.azure.account.oauth.provider.type": "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider",
+          "fs.azure.account.oauth2.client.id": applicationId,
+          "fs.azure.account.oauth2.client.secret": authenticationKey,
+           "fs.azure.account.oauth2.client.endpoint": endpoint)
+
+# Mounting ADLS storage to DBFS 
+# Mount only if the directory is not already mounted
+
+if not any (mount.mountPoint == mountPoint  for mount in dbutils.fs.mounts()):
+       dbutils.fs.mount (
+          source = source,
+          mount_point = mountPoint,
+          extra_configs= configs)
+
+#List files
+%fs
+ls "mnt/files"
+      
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
