@@ -1,0 +1,880 @@
+QUERYING DELTA TABLES WITH AZURE SYNAPSE ANALYTICS.
+--------------------------------------------------------------
+
+AZURE SYNAPSE ANALYTICS has multiple Compute Engines.
+
+ - Dedicated SQL Pool.
+ - Apache Spark Pool.
+ - Serverless SQL Pool etc.
+ 
+Query Delta Lake in Synapse .
+
+Apache Spark Pool.
+  - Uses open-source Delta Lake component.
+  - To use it , setup Spark Pool.
+  - Read & Write Data in Delta format.
+  
+Serverless SQL Pool.
+  - No pre-provisioned infrastructure required.
+  - Directly query Delta format.
+  - Only pay for the amount of data consumed by Queries.
+  
+
+A.Create a Spark Pool.
+
+Open Azure Synapse Studio -> 'Manage' -> 'Apache Spark Pools' --> Create a new one.
+(provide the Spark Pool name , node size , disable AutoScale, No. of nodes as 3.
+Go to 'Additional Settings' .
+  - Apache Spark - 3.2
+  - Delta Lake   - 1.1
+Click 'CREATE' to create the pool.
+
+B. Go to 'Data' tab --> 'Linked' section and select the 'TaxiData' container from the ADLS Gen2 account.
+
+C. Go to 'Output' folder --> 'YellowTaxis.delta' folder --> open one of the partition folders --> To query a Delta Lake folder 
+   right click on any file -> 'New Notebook' -> 'Load to DataFrame' . Attach the Notebook to Spark Pool .
+   Now change the path to only point to 'YellowTaxis.delta' and change the format to Delta.
+   
+   %%pyspark
+   df= spark.read.load ('abfss://taxidata@pltaxidatalake.dfs.core.windows.net/Output/YellowTaxis.delta/', format='delta')
+   display (df.limit(10))
+D. Click on 'Run cell'.
+
+   SQL Queries.
+       - 
+	   %%sql 
+	   
+	   CREATE DATABASE IF NOT EXISTS TaxisDB
+	   
+	%%sql
+	
+	CREATE TABLE TaxisDB.YellowTaxis
+	
+	USING DELTA
+	
+	LOCATION "abfss://taxidata@pltaxidatalake.dfs.core.windows.net/Output/YellowTaxis.delta"
+	
+	
+	%%sql
+	
+	SELECT *
+	FROM TaxisDB.YellowTaxis
+	LIMIT 100 
+	
+Query Delta Using Serverless SQL Pool.
+
+Go to Data Explorer --> Right click on the 'parquet' file --> select 'New SQL script' --> 'Select TOP 100 Rows'.
+     - This opens up a SQL script . This SQL script is coonected to a built-in engine,i.e. the Serverless SQL Pool.
+	 -  Change the path to only point to YellowTaxis.delta folder.
+	 - Change the format to Delta.
+	 - click on Run to run the SQL query.
+	 
+	 
+Optimizing with Delta Engine in Databricks.
+----------------------------------------------
+Delta engine is only available in Databricks. It is a high performing query engine built into Databricks Runtime helping to process and query data 
+faster than the Spark engine . 
+
+Can work with any data format including Delta .
+
+There are three components of Delta engine - 
+       - Query Optimizer
+	   - Photon Execution Engine.
+	   - Delta Cache .
+	   
+Delta engine Query Optimizer features :
+      -  Data Skipping
+	  - Bin-packing & Z-Order optimizations.
+	  - Vacuum
+	  - Auto-optimization
+	  - Data transformation optimizations
+	  - Join & Low shuffle merge optimizations
+	  
+Some of Delta engine optimizations are making their way to open-source Delta Lake .
+
+Improving Performance with Statistics and Data Skipping.
+-------------------------------------------------------------
+With each transaction log entry , statistics are computed and stored . 
+
+Sample transaction log entry .
+
+{"commitInfo": {"timestamp": 1640067393982, "userId": "1472626815582251",
+  "operation": "WRITE" , "operationParameters":{"mode":"Append"},
+  "operationMetrics":{"numFiles":"2", "numOutputBytes": "7284" , "numOutputRows": "200"}}}
+  
+  How Data Skipping works ?
+  
+  Suppose there are three part files.
+
+    File1:                       -------->                Stats computed 
+ EmpId  |  Salary                                       Column  | Minimum  | Maximum
+ 1      |  10,000                                        EmpId  |     1    |    3
+ 2      |  13,500                                        Salary |  10,000  |  15,000
+ 3      |  15,000
+	  
+ 
+ File2:                         --------->               Stats Computed 
+ EmpId  | Salary                                        Column |  Minimum   | Maximum
+ 4      | 18,000                                        EmpId  |  4         |    5
+ 5      | 21,000                                        Salary |  18,000    |  21,000
+
+
+File3:                         ---------->              Stats Computed 
+EmpId  | Salary                                       Column | Minimum | Maximum
+6      | 14,000                                       EmpId  |  6      |   8
+7      | 16,500                                       salary |  14,000 | 19,000
+8      | 19,000 
+  
+  
+All these stats are stored in the Transaction log.
+
+SELECT * 
+
+FROM Employees
+
+WHERE Salary BETWEEN 16000 AND 17000 
+
+Files 1 & 2 will be rejected based on computed stats.
+File 3 will be selected .
+
+There is only record with salary 16500 and that will be selected .
+
+Data skipping :
+     -   First checks the statistics in the log.
+	 -   Reads only files which fall within range of filter conditions.
+	 -  Rest of the files are skipped.
+	 
+This can significantly improve query perfomance . 
+
+A. Re-create Parquet and Delta tables -
+
+%python
+
+dbutils.fs.rm("/mnt/datalake/Output/YellowTaxis.parquet", True)
+dbutils.fs.rm("/mnt/datalake/Output/YellowTaxis.delta", True)
+
+DROP TABLE IF EXISTS TaxisDB.YellowTaxisParquet;
+DROP TABLE IF EXISTS TaxisDB.YellowTaxis;
+
+%python
+
+# Create schema for Green Taxi Data 
+
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+yellowTaxiSchema = (
+                      StructType()
+					     .add("RideId", "integer")
+						 .add("VendorId", "integer")
+						 .add("PickupTime","timestamp")
+						 .add("DropTime", "timestamp")
+						 .add("PickupLocationId", "integer")
+						 .add("DropLocationId", "integer")
+						 .add("CabNumber" , "string")
+						 .add("DriveLicenseNumber", "string")
+						 .add("PassengerCount", "integer")
+						 .add("TripDistance", "double")
+						 .add("RatecodeId", "integer")
+						 .add("PaymentType", "integer")
+						 .add ("TotalAmount", "double")
+						 .add("FareAmount","double")
+						 .add("Extra","double")
+						 .add("MtaTax", "double")
+						 .add("TipAmount", "double")
+						 .add("TollsAmount","double")
+						 .add("ImprovementSurcharge", "double")
+						 
+				)
+				
+yellowTaxisDF = (
+                      spark
+					   .read 
+					   .option("header", "true")
+					   .schema (yellowTaxiSchema)
+					   .csv("/mnt/datalake/Raw/YellowTaxis/YellowTaxis1.csv")
+					   
+               )
+
+
+yellowTaxisDF = (
+
+                     yellowTaxisDF
+                       .withColumn("TripYear", year("PickupTime"))
+                       .withColumn("TripMonth", month("PickupTime"))
+                       .withColumn("TripDay", dayofmonth("PickupTime"))
+                )
+
+# Store output to Data Lake in Parquet format 
+
+(
+     yellowTaxisDF
+	    .write 
+		.mode ("overwrite")
+		
+		.partitionBy("PickupLocationId")
+		
+		.format("parquet")
+		
+		.option("path", "/mnt/datalake/Output/YellowTaxis.parquet")
+		.saveAsTable("TaxisDB.YellowTaxisParquet")
+)
+
+# Store data in Delta format
+
+(
+     yellowTaxisDF
+	    .write 
+		.mode ("overwrite")
+		
+		.partitionBy("PickupLocationId")
+		
+		.format("delta")
+		
+		.option("path", "/mnt/datalake/Output/YellowTaxis.delta")
+		.saveAsTable("TaxisDB.YellowTaxis")
+)
+
+
+#Check table history
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis
+
+B. Counting of records 
+
+- Parquet tables scan each file to count the number of records.
+- Delta tables get the count from transaction log.
+
+-- From Parquet
+
+SELECT COUNT(*)
+
+FROM TaxisDB.YellowTaxisParquet
+
+
+--From Delta
+
+
+SELECT COUNT(*)
+
+FROM TaxisDB.YellowTaxis
+
+-- Delta table query takes less times (0.96 sec.) to execute than Parquet table query (50.5 sec.)
+
+With growing volume of data , Parquet tables will take more time to query than Delta tables.
+
+C. Data Skipping
+
+-  Parquet tables scan each file to count the number of records.
+-  Both Parquet and Delta tables support partition elimination.
+
+SELECT * 
+FROM TaxisDB.YellowTaxisParquet
+WHERE RideId = 67
+
+
+** Note : The above query scans all the files and takes more time to execute .
+** Note : Databricks gives a hint to convert the table to Delta .
+
+SELECT * 
+FROM TaxisDB.YellowTaxis
+WHERE RideId = 67
+
+** Note : The above query scans the transaction logs and takes less time to execute .
+** Note: On Parquet table: 42.74 sec. , On Delta table: 3.40 sec.
+
+Optimizing & Z-Ordering Delta Table.
+----------------------------------------
+
+Optimize Options
+
+  -  Bin-Packing / File Compaction
+  -  Z-Ordering
+
+Suppose there is a 'Customer' folder in the data lake containing over 200 files .
+Continuosly writing data to a table adds multiple small files over a period of time.
+Reading too many small files involves lot of overhead .(small files problem)
+
+In Delta Lake this can be solved by using Bin-Packing or File Compaction feature.
+To use it we can use the Optimize command on Delta tables. This will take data from small size files and pack it into bigger size files.
+Data is compressed and stored in new evenly-balanced , larger files of optimal size.
+
+- Default max size is 1GB which can be changed.
+- Previous files are still there to support time travel.
+
+Run Optimize periodically depending on number of operations on your table !
+
+
+Scenario 2:
+
+Suppose there are three files -
+
+File1:
+
+Id | City
+1  | Seattle
+2  | Paris
+3  | Delhi
+
+File2:
+
+Id | City
+4  | Delhi
+5  | London
+
+
+File3:
+
+Id | City
+6  | Zurich
+7  | Seattle
+8  | Delhi
+
+
+The record for Delhi is present in all three files.This means all three files should be opened to get the data .
+
+SELECT *
+
+FROM Customer
+
+WHERE City = 'Delhi'
+
+These scenarios can be optimized by using Z-Order Optimization.
+
+Use OPTIMIZE ZORDER BY (City). It will create new files but data will be sorted by City column and then stored in the files.
+
+File 4:
+Id | City
+3  | Delhi
+8  | Delhi
+4  | Delhi
+5  | London 
+
+File5:
+Id | City
+2  | Paris
+7  | Seattle
+1  | Seattle
+6  | Zurich
+
+SELECT *
+
+FROM Customer
+
+WHERE City = 'Delhi'
+
+
+Data will be picked up from one file only (File4) while the other file(File5) will be ignored bacause of Data Skipping.
+
+When we run OPTIMIZE ZORDER BY (City) command it performs Bin-packing but along with that data is sorted and co-located in files based 
+on Z-Order columns .
+
+Very similar to cluster-indexing a database.
+
+Improves perfomance by data skipping.
+
+** Note: Use columns which are frequently used in filters , joins and grouping queries .
+** Note : Bin-packing and Z-Ordering are CPU intensive, costly operations because of physical reorganization of data .
+
+A. Check performance before optimization-
+
+SELECT PickupLocationId
+, COUNT (*) AS TotalRides
+
+FROM TaxisDB.YellowTaxisParquet
+
+WHERE TripYear = 2022
+  AND TripMonth = 3
+  AND TripDay = 15
+  
+
+GROUP BY PickupLocationId
+ 
+ORDER BY TotalRides DESC 
+
+
+-Run the same query on the Delta table. It will take significantly lesser time . On Parquet table 1.12 min. and on Delta table 9.42 sec.
+This is because of Data Skipping.
+
+SELECT PickupLocationId
+, COUNT (*) AS TotalRides
+
+FROM TaxisDB.YellowTaxis
+
+WHERE TripYear = 2022
+  AND TripMonth = 3
+  AND TripDay = 15
+  
+
+GROUP BY PickupLocationId
+ 
+ORDER BY TotalRides DESC 
+
+
+
+B. Optimize : Bin-packing
+
+OPTIMIZE TaxisDB.YellowTaxis 
+ 
+WHERE PickupLocationId = 100               --optional 
+
+-- One Partition gets optimized , 10 files gets removed(retained only for time travel)  , 1 file gets added .This one single now contains all the records.
+
+C. Optimize - Z-Ordering
+
+OPTIMIZE TaxisDB.YellowTaxis
+
+ZORDER BY TripYear , TripMonth , TripDay    --optional 
+
+
+-- More than 256 partitions have been optimized , 2512 files removed  and 255 new files added.
+
+ 
+A. Check performance after optimization-
+
+SELECT PickupLocationId
+, COUNT (*) AS TotalRides
+
+FROM TaxisDB.YellowTaxisParquet
+
+WHERE TripYear = 2022
+  AND TripMonth = 3
+  AND TripDay = 15
+  
+
+GROUP BY PickupLocationId
+ 
+ORDER BY TotalRides DESC  
+
+Performance much better than previous queries .
+
+On Parquet table : 1.12 min.
+
+On Delta table: 9.42 sec.
+
+On Delta table: 6.74 sec. 
+(optimized)
+
+Z-Ordering is even more effective than higher volumes of data. 
+
+
+Cleaning Files with Vacuum 
+---------------------------
+Insert (add 4 records)
+
+Part1 File:                  
+
+Id | Name 
+1  | A
+2  | B
+					   
+Part2 File:                                                    _delta_log (subfolder)                                     
+                                                                 000.json
+Id | Name                                                       Operation  |   File Name
+3  |  C                                                          Add        |   Part1
+4  |  D                                                          Add        |   Part2
+
+
+
+
+Delete (where Id=1)                                             _delta_log (subfolder)                     
+                                                                 001.json
+Part3 File:                                                       Operation   |   File Name      
+Id |  Name                                                        Remove      |   Part1
+2  |   B                                                           Add        |   Part2
+
+
+
+Part 1 File can be used for time travel .
+
+But suppose we don't want to use this file and want to clean up. 
+This is where Vacuum command is used.
+
+Vacuum command physically removes data files.
+           -  Files that are no longer referenced in the latest transaction log state .
+           -   And files that are older than a retention threshold.(default is 7 days)
+		   
+	Affects time travel.
+	Tip: Set the retention period for time travel and run Vacuum periodically !! 
+	
+Cleaning Files with Vacuum
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis
+
+Switch over to Azure Data lake folder to check the files in data lake.
+
+
+VACUUM TaxisDB.YellowTaxis
+
+RETAIN 0 HOURS DRY RUN
+ 
+
+Specifiying 0 hrs. will delete all previous versions. Use DRY RUN clause .
+It will not actually delete the files but return a list of files to be deleted.
+
+If we don't retention hrs. by default it is 7 hrs.
+
+Databricks will give us a warning about deleting files with such a low retention period.So it is important to set the right retention period.
+
+But if we still want to delete all previous versions.
+
+SET spark.databricks.delta.retentionDurationCheck.enabled = false
+
+Again run. 
+
+VACUUM TaxisDB.YellowTaxis
+
+RETAIN 0 HOURS DRY RUN
+
+It will return a list of files to be deleted by Vacuum as they are not referenced by the latest version of the table.
+
+Run Vacuum again to physically delete the files.
+
+VACUUM TaxisDB.YellowTaxis
+
+RETAIN 0 HOURS 
+
+
+Verify from the Azure portal to check whether files have been physically deleted or not.
+
+Again check Transaction Log.
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis
+
+
+Files for Time travel are not longer available.
+
+SELECT * 
+FROM TaxisDB.YellowTaxis VERSION AS OF 0 
+
+
+
+Enabling Auto Optimization on Delta tables.
+------------------------------------------------
+
+Auto Optimize features:- 
+
+Optimized Writes                                        Auto Compaction                                       
+
+(Auto bin-packing while writing)                     (Auto bin-packing after writing)
+
+Suppose we have a Job(process sales data) . Spark will create optimal tasks that will write optimal size part files to the data lake.
+
+Optimized Writes -
+  - While writing data , Databricks dynamically tries to create - 128 MB Partition Files.
+  - Prevents creation of small files without sacrificing parallelism , but with slight overhead.
+  - No need to run Optimize command later.
+  
+  Use cases -
+      -  Helpful when loading streaming data.
+	  -  When performing DML operations on table.
+	  
+
+Auto Compaction -
+    -  Immediately after writing , Databricks further checks partition files in Delta folder.
+	- Any non-compacted files are compacted to - 128 MB.
+	- Only runs when there are more than 50 small files.
+	- No need to run Optimize command later.
+	
+Use cases -
+      -  Helpful when loading streaming data.
+	  - Where Optimize command is called after each write. 
+	  
+	  
+A. Create & load Delta Table (non-optimized)
+
+
+CREATE TABLE TaxisDB.YellowTaxis_NonOptimized
+(
+RideId                 INT         COMMENT 'This is the primary key column',
+VendorId               INT,           
+PickupTime             TIMESTAMP,
+DropTime               TIMESTAMP,
+PickupLocationId       INT,
+DropLocationId         INT,
+CabNumber              STRING,
+DriveLicenseNumber     STRING,
+PassengerCount         INT,
+TripDistance           DOUBLE,
+RateCodeId             INT,
+PaymentType            INT,
+TotalAmount            DOUBLE,
+FareAmount             DOUBLE,
+Extra                  DOUBLE,
+MtaTax                 DOUBLE,
+TipAmount              DOUBLE,
+TollsAmount            DOUBLE,
+ImprovementSurcharge   DOUBLE
+
+)
+
+USING DELTA
+LOCATION "/mnt/datalake/Output/YellowTaxis_NonOptimized.delta"
+PARTITIONED BY (PickupLocationId)  
+
+
+
+%python
+
+# Create schema for Green Taxi Data 
+
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+yellowTaxiSchema = (
+                      StructType()
+					     .add("RideId", "integer")
+						 .add("VendorId", "integer")
+						 .add("PickupTime","timestamp")
+						 .add("DropTime", "timestamp")
+						 .add("PickupLocationId", "integer")
+						 .add("DropLocationId", "integer")
+						 .add("CabNumber" , "string")
+						 .add("DriveLicenseNumber", "string")
+						 .add("PassengerCount", "integer")
+						 .add("TripDistance", "double")
+						 .add("RatecodeId", "integer")
+						 .add("PaymentType", "integer")
+						 .add ("TotalAmount", "double")
+						 .add("FareAmount","double")
+						 .add("Extra","double")
+						 .add("MtaTax", "double")
+						 .add("TipAmount", "double")
+						 .add("TollsAmount","double")
+						 .add("ImprovementSurcharge", "double")
+						 
+				)
+
+  
+yellowTaxisDF = (
+                      spark
+					     .read 
+					     .option("header", "true")
+					     .schema (yellowTaxiSchema)
+					     .csv("/mnt/datalake/Raw/YellowTaxis/YellowTaxis1.csv")
+					   
+               )
+ Run the above code .
+ 
+ 
+ Now let's run data from the DataFrame to this table.
+ 
+ %python
+ 
+ (
+ 
+      yellowTaxisDF
+	         .write
+			 .mode("append")
+			 .partitionBy("PickupLocationId")
+			 .format("delta")
+			 .save ("/mnt/datalake/Output/YellowTaxis_NonOptimized.delta")
+)
+
+# Optimized Table
+---------------------
+CREATE TABLE TaxisDB.YellowTaxis_Optimized
+(
+RideId                 INT         COMMENT 'This is the primary key column',
+VendorId               INT,           
+PickupTime             TIMESTAMP,
+DropTime               TIMESTAMP,
+PickupLocationId       INT,
+DropLocationId         INT,
+CabNumber              STRING,
+DriveLicenseNumber     STRING,
+PassengerCount         INT,
+TripDistance           DOUBLE,
+RateCodeId             INT,
+PaymentType            INT,
+TotalAmount            DOUBLE,
+FareAmount             DOUBLE,
+Extra                  DOUBLE,
+MtaTax                 DOUBLE,
+TipAmount              DOUBLE,
+TollsAmount            DOUBLE,
+ImprovementSurcharge   DOUBLE
+
+)
+
+USING DELTA
+LOCATION "/mnt/datalake/Output/YellowTaxis_Optimized.delta"
+PARTITIONED BY (PickupLocationId)  
+
+
+TBLPROPERTIES (delta.autoOptimize.optimizeWrite = true , delta.autoOptimize.autoCompact = true )
+
+
+Now add data to this Table from the same dataframe.
+
+ %python
+ 
+ (
+ 
+      yellowTaxisDF
+	         .write
+			 .mode("append")
+			 .partitionBy("PickupLocationId")
+			 .format("delta")
+			 .save ("/mnt/datalake/Output/YellowTaxis_NonOptimized.delta")
+)
+
+Switch over to Data Lake.
+
+Working with Photon Execution Engine.
+---------------------------------------
+        - Native vectorized query engine built by Databricks.
+		- Written in C++ taking benefit of modern hardware.
+		- Works with Delta and Parquet based tables.
+		- Much faster than Spark against high data volumes.
+		- To use it , select Databricks Runtime with Photon.
+		- Costlier than Spark based clusters.
+		
+Go to 'compute' tab --> 'Create Cluster'  --> 'Databricks runtime version' (from there select 'Photon').
+
+This will create a Photon cluster.
+
+A. Query using Spark Engine.
+
+Using normal cluster . Run it twice .
+
+SELECT PickupLocationId
+    , COUNT(*) AS TotalRides
+
+FROM TaxisDB.YellowTaxis
+
+WHERE TripYear = 2022
+AND  TripMonth  = 3
+AND TripDay = 15
+
+GROUP BY PickupLocationId
+
+ORDER BY TotalRides DESC 
+
+Spark cluster : 5.41 sec.
+
+
+B. Query using Photon Engine. Run it twice .
+
+SELECT PickupLocationId
+    , COUNT(*) AS TotalRides
+
+FROM TaxisDB.YellowTaxis
+
+WHERE TripYear = 2022
+AND  TripMonth  = 3
+AND TripDay = 15
+
+GROUP BY PickupLocationId
+
+ORDER BY TotalRides DESC 
+
+Photon cluster : 2.26 sec. 
+
+
+
+Using Delta Cache 
+-----------------------
+
+Two types of caching available in Databricks .
+
+1. Apache Spark Cache (Part of Spark)
+
+2. Delta Cache (Part of Delta Engine) 
+
+How Delta Cache works?
+    - Works for Parquet and Delta formats .
+	- Files are read from the external storage for the first time.
+	- Stored on local disks of cluster machines .
+	- Successive reads of same data are served using local files , improving query performance.
+	
+Cache is automatically invalidated / evicted if :
+       - Underlying files are modified.
+	   - If Cluster is restarted all cache files are removed.
+	   
+How to use Delta Cache ?
+
+   - Use Delta Cache Accelerated VMs as worker machines - caching enabled by default.
+   - Explicitly enable cache on other VM types.
+
+To use Delta Cache we can use Cluster with Delta Cache Accelerated VMs.   
+
+Click on 'Create Cluster' --> from 'Worker Type' select 'Delta Cache Accelerated VMs'.
+
+Use a cluster with non-delta cache enabled VM.
+
+A.Check if Delta cache is enabled.
+
+%python
+
+spark.conf.get("spark.databricks.io.cache.enabled")
+
+Delta Cache is disabled by default.
+
+Run an aggregation query to check perfomance.
+
+
+SELECT PickupLocationId
+    , COUNT(*) AS TotalRides
+
+FROM TaxisDB.YellowTaxis
+
+WHERE TripYear = 2022
+AND  TripMonth  = 3
+AND TripDay = 15
+
+GROUP BY PickupLocationId
+
+ORDER BY TotalRides DESC 
+
+Run it one more time and notice the time it took.
+
+B. Enable Delta Cache
+
+spark.conf.set("spark.databricks.io.cache.enabled", "true")
+
+Run the Query again.
+------------------------------
+
+SELECT PickupLocationId
+    , COUNT(*) AS TotalRides
+
+FROM TaxisDB.YellowTaxis
+
+WHERE TripYear = 2022
+AND  TripMonth  = 3
+AND TripDay = 15
+
+GROUP BY PickupLocationId
+
+ORDER BY TotalRides DESC 
+
+
+** Note :
+Without Delta Cache - 6.24 sec.
+
+With Delta cache - 7.05 sec.
+(first execution)
+
+With Delta cache - 1.38 sec.
+(next execution)
+
+It's not picking up the files from storage but picking it from Cache itself.
+
+C. Manually push data to Delta Cache .
+
+CACHE 
+
+SELECT * 
+FROM TaxisDB.YellowTaxisParquet 
+WHERE TripDay = 1
+
+
+
+
+
+		
+
+
+
+

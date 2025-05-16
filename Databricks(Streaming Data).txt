@@ -1,0 +1,954 @@
+Handling Streaming Data on Delta Lake.
+
+Scenario 1:
+
+App/Device on cab -> Stream Ingestion ->   Stream Processing  ->     Delta Lake
+                     (Azure Event Hubs)    (Structured Streaming)   (Azure Data Lake Gen2)
+					 
+Ride Start           {                                               RideId | PickupTime   |   DropTime
+                       "RideId"   : 1,					                1   |  2022-02-08  |  2022-02-08
+					   "PickupTime":"2022-02-08 10:00"                            10:00         10:20
+					 }
+
+
+Ride End           {
+                       "RideId"   : 1,					 
+					   "PickupTime":"2022-02-08 10:20"
+				 } 					 
+				 
+
+
+
+Scenario2:                                |->  Stream Processing  |->
+                                         /      (VendorId 1)         \
+                                        /                             \
+                                       /                               \
+App/Device on cab -> Stream Ingestion /                                -------> Delta Lake 
+(multiple vendorIds)                  \                               /
+									   \                             /
+									    \                           / 
+										 \                         /
+										 |->   Stream Processing  |
+										       (VendorIds other than 1)  
+											   
+											
+Benefits of Streaming on Delta Lake:
+
+-Integrated with Spark Structured Streaming
+
+- Batch and Streaming data can be stored together.
+
+- Streaming upserts can be performed on delta lake.
+     - Incremental loads can be performed.
+	 
+- Multiple streams can write to the same table.
+       - Delta tables can handle concurrency.
+	   
+-Delta Tables can be used as streaming source and sink.
+
+
+Setting up Streaming Environment.
+-----------------------------------
+
+Setup Azure EventHubs as streaming source 
+
+Create 
+  - Event Hub Namespace
+  - An EventHub inside Namespace
+  - Two consumer groups inside Event Hub.
+  
+Copy Namespace connection string.
+
+From Azure portal -- > Cloud shell 
+
+PS >  $RGName = "PSDeltaLakeDemoRG"
+
+PS >  $EHNamespace = "pstaxinamespace"
+
+PS>   $Location =  "eastus2"
+
+PS>   $EventHubName = "RideEventHub"
+
+PS>   ./6-EventHub.ps1
+
+Copy the Namespace connection string and the name of Event Hub.
+
+Configure a sample application that will simulate the Taxis.
+           Prerequisites
+		    - .NET6
+		Download & configure Application.
+		   -  Add Namespace connection string.
+		   - Add Event Hub Name
+        
+		Run Application from Terminal.
+		  - Open the folder where you have downloaded the application.
+		  - Open appsettings.json file in any editor and paste the connection string of the Namespace and the name of the EventHub.
+		  - Open command prompt - Go to the application folder. 
+                            - Build project: dotnet build
+                            - Run project : dotnet run 
+
+		P = Pickup event
+        D  = Drop Event
+
+Configure Event Hub in Databricks.
+
+Deploy Event Hubs connector 
+        -  Deploy using Databricks libraries.
+		
+Configure Notebook to use Event Hub.
+          -Add Namespace connection string.
+		  - Add Event Hub name.
+		  
+To install library -> go to the Cluster's tab and open the Cluster.-->Navigate to libraries. --> Click on 'Install New'
+--> the Events Hub library is found on Maven -> to find the library click on 'Search Packages'--> select 'Maven Central' from the dropdown.
+--> search for 'azure-eventhubs-spark' --> choose the latest release and click Select.--> Once selected click on 'Install'.
+
+This will install the azure event hub library on the cluster and it will be available to all the notebooks.
+
+Configure the notebook to use the Event Hub.
+
+# Namespace Connection String.
+
+namespaceConnectionString= <namespaceConnectionString>
+
+#EventHubName
+
+eventHubName= 'RideEventHub'
+
+# Event Hub connection string
+
+eventHubConnectionString = namespaceConnectionString + ";EntityPath=" + eventHubName 
+
+
+#Event Hub Configuration for Reader 1.(Put the above information in a dictionary called 'eventHubReader1' using EventHubsUtils.encrypt()method)	
+
+eventHubReader1 = {
+ 'eventhubs.connectionString' : sc._jvm.org.apache.spark.eventhubs.EventHubsUtils.encrypt(eventHubConnectionString),
+ 
+ 'eventhubs.consumerGroup' : 'reader1'
+
+}
+ 
+
+Building Streaming Pipeline with DeltaLake.
+
+B. Read data from Event Hubs.
+
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+from pyspark.sql import *
+
+
+rideInputDF = (
+
+                   spark
+				      .readstream
+					  .format ("eventhubs")
+					  .options (**eventHubReader1)
+					  .load()
+		     )
+			 
+display ( 
+           rideInputDF,
+		   streamName = "RidesInputMemoryQuery" , 
+		   processingTime = '5 seconds'
+)
+	
+Now switch over to the sample application - (CMD)
+    - D:\DeltaLake\NycTaxiTelemetryApp> dotnet run (press enter)
+    
+Data will be in EventsHub binary format.
+
+rideSchema = (
+                StructType()
+				.add("RideId" , "integer")
+				.add("VendorId", "integer")
+				.add("EventType","string")
+				.add ("PickupTime", "timestamp")
+				.add("PickupLocationId","integer")
+				.add("CabLicense" , "string")
+				.add("DriverLicense", "string")
+				.add("PassengerCount", "integer")
+				.add("RateCodeId", "integer")
+				.add("DropTime", "timestamp")
+				.add("DropLocationId", "integer")
+				.add("TripDistance" , "double")
+				.add("PaymentType", "integer")
+				.add("TotalAmount","double")
+
+     )
+
+
+# Cast the data body of the Eventhub to string since it's in binary format.Then convert the string to json using 'from_json' method.
+# To extract data from json type use columnname.attributename .  
+
+rideDF = (
+                rideInputDF
+				   .select (
+				                from_json (
+								               col("body").cast ("string"),
+											   rideSchema
+									    )
+                                    .alias ("taxidata")
+									
+						)
+						
+						.select (
+						
+						           "taxidata.RideId",
+								   "taxidata.VendorId",
+								   "taxidata.EventType",
+								   "taxidata.PickupTime",
+								   "taxidata.CabLicense",
+								   "taxidata.DriverLicense",
+								   "taxidata.PickupLocationId",
+								   "taxidata.PassengerCount",
+								   "taxidata.RateCodeId",
+								   "taxidata.DropTime",
+								   "taxidata.DropLocationId",
+								   "taxidata.TripDistance",
+								   "taxidata.PaymentType",
+								   "taxidata.TotalAmount"
+							)
+							
+	)
+
+
+display (
+            rideDF,
+			streamName = "RidesMemoryQuery",
+			processingTime = '5 seconds' 
+			
+) 
+
+-- Now create a Delta table to store this data.
+
+%sql
+
+CREATE OR REPLACE TABLE TaxisDB.GreenTaxis
+
+(
+     RideId                  INT,
+	 VendorId                INT,
+	 EventType               STRING,
+	 PickupTime              TIMESTAMP,
+	 PickupLocationId        INT,
+	 CabLicense              STRING,
+	 DriverLicense           STRING,
+	 PassengerCount          INT,
+	 DropTime                TIMESTAMP,
+	 DropLocationId          INT,
+	 RateCodeId              INT,
+	 PaymentType             INT,
+	 TripDistance            DOUBLE,
+	 TotalAmount             DOUBLE
+)
+
+USING DELTA 
+
+LOCATION "/mnt/datalake/Output/GreenTaxis.delta"
+
+-- To start saving the data from stream use 'writeStream' method .
+
+(
+    rideDF
+         .writeStream
+
+         .format ("delta")
+
+         .outputMode("append")
+
+         .option ("checkpointLocation", "/mnt/datalake/Output/Checkpoints/GreenTaxis")
+
+         .trigger (processingTime = '5 seconds')
+
+         .table ("TaxisDB.GreenTaxis")
+)
+
+Once again start the application (from CMD)
+
+D:\DeltaLake\NycTaxiTelemetryApp> dotnet run (press enter)	
+
+Verify the count of records .
+
+%sql
+
+SELECT COUNT(*) 
+FROM TaxisDB.GreenTaxis
+
+-- Create a report to aggregate the rights by vendor Id.
+
+%sql
+
+CREATE OR REPLACE TABLE TaxisDB.GreenTaxisSummary
+(
+
+     VendorId    INT,
+     TotalRides  LONG
+)
+
+USING DELTA 
+
+LOCATION "/mnt/datalake/Output/GreenTaxisSummary.delta"
+
+
+ridesSummaryDF = (
+                       rideDF
+                         .where ("EventType='P'")
+                         
+                         .groupBy("VendorId")
+                         .agg(count("RideId").alias("TotalRides"))
+                )
+				
+(
+
+       ridesSummaryDF
+	       .writeStream
+		   .format("delta")
+		   
+		   .outputMode("complete")
+		   
+		   .option ("checkpointLocation", "/mnt/datalake/Output/Checkpoints/GreenTaxisSummary")
+		   
+		   .trigger (processingTime = '5 seconds')
+		   
+		   .table ("TaxisDB.GreenTaxisSummary")
+		   
+)
+
+
+** Note : .outputMode("complete") means with each 5 sec. run the whole table will be overwritten and the new aggregate values will be added there.
+
+
+Once again start the application (from CMD)
+
+D:\DeltaLake\NycTaxiTelemetryApp> dotnet run (press enter)
+
+%sql
+
+SELECT * 
+FROM TaxisDB.GreenTaxisSummary
+
+** Note :
+    - Append mode - Inserts new records in table.
+	- Complete mode - Overwrites the table. 
+	
+	
+Updating Delta Table with Streaming Data.
+---------------------------------------------
+%sql
+
+SELECT * FROM TaxisDB.GreenTaxis
+
+-- We would like Pickup and Drop information in the same row for each RideId.
+
+-- Use Truncate command to delete from the tables first.
+
+%sql
+
+TRUNCATE TABLE TaxisDB.GreenTaxis
+
+Spark structured streaming doesn't support direct update to Delta table.
+
+def writeGreenTaxiEvents (batchDF, batchId):
+
+      # MERGE data into Delta Table
+pass
+
+
+(
+
+      rideDF
+	     .writeStream
+		 .foreachBatch(writeGreenTaxiEvents)
+		 .outputMode ("append")
+		 .option ("checkpointLocation", "/mnt/datalake/Output/Checkpoints/GreenTaxisUpdate")
+		 .trigger (processingTime = '5 seconds') 
+		 .start()
+		 
+)
+
+def writeGreenTaxiEvents (batchDF, batchId):
+
+      batchDF.createOrReplaceTempView("changes")
+	  
+	  (
+	       batchDF._jdf.sparkSession().sql("""
+		   
+		    MERGE INTO TaxisDB.GreenTaxis tgt
+                USING changes  src  	        ON tgt.RideId = src.RideId  AND  tgt.VendorId = src.VendorId
+		 
+           -- When conditions match, update records 
+           WHEN MATCHED AND src.EventType = 'P'
+               THEN UPDATE SET  tgt.PickupTime = src.PickupTime, tgt.CabLicense = src.CabLicense , tgt.DriverLicense = src.DriverLicense,
+                                tgt.PickupLocationId=src.PickupLocationId,tgt.PassengerCount = src.PassengerCount, tgt.RateCodeId = src.RateCodeId
+								
+		   WHEN MATCHED AND src.EventType = 'D'
+                 THEN UPDATE SET tgt.DropTime = src.DropTime , tgt.DropLocationId = src.DropLocationId , tgt.TripDistance = src.TripDistance,
+                                 tgt.TotalAmount = src.TotalAmount , tgt.PaymentType = src.PaymentType
+								 
+		  -- When conditions do not match , insert record
+		  WHEN NOT MATCHED 
+		          THEN INSERT(RideId,VendorId,PickupTime,CabLicense,DriverLicense, PickupLocationId,PassengerCount, DropTime,DropLocationId,
+				              TripDistance, TotalAmount, RateCodeId , PaymentType)
+							  
+				        VALUES (RideId,VendorId,PickupTime,CabLicense,DriverLicense, PickupLocationId,PassengerCount, DropTime,DropLocationId,
+				              TripDistance, TotalAmount, RateCodeId , PaymentType)
+	
+	       """)
+		   
+	)
+    pass
+	
+Now run the query.
+
+(
+     rideDF
+	    .writeStream
+		
+		.foreachBatch (writeGreenTaxiEvents)
+		
+		.outputMode ("append")
+		
+		.option ("checkpointLocation" , "/mnt/datalake/Output/Checkpoints/GreenTaxisUpdate")
+		
+		.trigger (processingTime = '5 seconds')
+		
+		.start()
+		
+)
+
+Start the application again.
+
+D:\DeltaLake\NycTaxiTelemetryApp> dotnet run 
+
+Run query on the Table.
+
+%sql
+
+SELECT *
+FROM TaxisDB.GreenTaxis 
+ORDER By RideId
+
+
+Run another query to check only completed rides.
+
+%sql
+
+SELECT *
+FROM TaxisDB.GreenTaxis 
+WHERE PickupTime IS NOT NULL AND DropTime IS NOT NULL
+ORDER By RideId
+
+Transaction Log Checkpointing
+------------------------------
+
+Checkpoints are written to store the intermediate state.
+
+If we are writing to the Delta table it will create the Transaction Log.(_delta_log(subfolder))
+
+For each transaction a log file will be created in the Transaction Log folder.
+
+000.json
+   |
+001.json
+   |
+   |
+   |
+   |
+008.json
+009.json     <-------------   Read current >> Reads log till version 9 
+010.json     <--------- Write version 10
+010.checkpoint.parquet <------------    Writes a checkpoint file every 10 commits 
+                                        Saves entire table state at a point in time.
+011.json    <-----  Read current >> Reads latest checkpoint at 10 and version 11.So there is no need to read all the previous logs as their information is stored in the latest Checkpoint file.
+    |
+    |
+    |
+    |
+    |
+    |
+    |
+    |
+    |
+020.json
+020.checkpoint.parquet
+	
+**** Note :
+    - Checkpoint is handled by Delta Lake.
+	- Log retention interval is 30 days by default.
+	- With checkpoints , versions older than 30 days are removed.
+	
+
+Since we have run streaming job on the Taxis table let's check the history of this table.
+
+DESCRIBE HISTORY TaxisDB.GreenTaxis
+
+Go to Azure portal and open the folder location of 'GreenTaxis' . Open _delta_log folder. We will find the checkpoint file.
+
+
+Handling Concurrency
+----------------------
+
+Delta Lake uses Optimistic Concurrency.
+
+
+                         1 - Simultaneous Inserts
+Writer A                                           _delta_log               Writer B		
+Insert record with Id=2       Id | Name             000.json                Insert record with Id=3
+                               1 |  A     
+1.Records current version                                                    1. Record current version
+(000.json)                                                                      (000.json)
+
+2. Write partition file        Id | Name            001.json                 2. Write partition file
+                                2 | B
+3. Try to commit changes                                                     3. Try to commit changes to 
+  to transaction log           Id | Name            002.json                     transaction log
+                                3 |  C
+								
+								
+Both will try to commit the changes to Transaction Log. Both will try to write to the json file(001.json)
+
+Suppose Writer A is able to commit the log first . Writer B is then not able to commit the log file.
+
+This is how Optimistic Concurrency works and that's how Delta Lake provides isolation to transactions.							
+
+In this case Delta Lake will optimistically retry to add a log entry. So it adds another log file (002.json) . 
+This is only possible if an insert fails. That's how multiple inserts can work concurrently.
+
+                         
+	
+                  	               2 - Simultaneous Updates
+Writer A	                                         _delta_log                 Writer B					
+
+Update record with Id=1 			  |Id | Name|       Operation |  File       Update record with Id=1			
+									   1 |  A	|        Add      |  Part1
+1. Record current version                                                       1. Record current version
+     (000.json)                       Id  |  Name       Operation | File          (000.json)
+                                        1  |  A1         Remove   | Part1
+2. Write partition file                                   Add     | Part2       2. Write partition file
+                                      Id  | Name
+                                       1  |  B1
+		
+Writer A is trying to update from A to A1 while writer B is trying to update from A to B1.Once done both will try to commit the changes.
+Assume that writer A commits first . It mentions that Part1 is no longer required and Part2 is the new file. 
+Writer B won't be able to commit the log since file Part1 is now considered removed. 
+This is how concurrent updates are handled by Delta Lake.
+No retries are performed if an update command fails.
+
+**** How Write conflicts are Handled ?
+
+WriterA                          WriterB                                 Conflict
+
+Insert                            Insert                                 No conflict. Silently handled
+
+Insert                       Update/Delete/Merge                         No conflict. Silently handled
+
+Update/Delete/ Merge          Update/Delete/ Merge                        Can conflict if working on same set of files.
+                                                                         Resolve it by making sure that both writers are working on 
+                                                                           seperate partitions.
+																		   
+																		   
+
+Demo: Handling Concurrency 	
+
+A.1 - Define Event Hub Namespace connection string.
+
+from pyspark.sql.functions import *
+from pyspark.sql.types  import *
+
+# Namespace Connection String.
+
+namespaceConnectionString= <namespaceConnectionString>
+
+#EventHubName
+
+eventHubName= 'RideEventHub'
+
+# Event Hub connection string
+
+eventHubConnectionString = namespaceConnectionString + ";EntityPath=" + eventHubName 															   
+																		   
+A.2 - Define schema for Green Taxis 
+
+rideSchema = (
+                StructType()
+				.add("RideId" , "integer")
+				.add("VendorId", "integer")
+				.add("EventType","string")
+				.add ("PickupTime", "timestamp")
+				.add("PickupLocationId","integer")
+				.add("CabLicense" , "string")
+				.add("DriverLicense", "string")
+				.add("PassengerCount", "integer")
+				.add("RateCodeId", "integer")
+				.add("DropTime", "timestamp")
+				.add("DropLocationId", "integer")
+				.add("TripDistance" , "double")
+				.add("PaymentType", "integer")
+				.add("TotalAmount","double")
+
+     )						 
+
+A.3 - Cleanup files and re-create the table.
+
+dbutils.fs.rm ("/mnt/datalake/Output/GreenTaxis.delta", True)
+
+%sql
+
+DROP TABLE IF EXISTS TaxisDB.GreenTaxis; 
+
+CREATE OR REPLACE TABLE TaxisDB.GreenTaxis
+
+(
+     RideId                  INT,
+	 VendorId                INT,
+	 EventType               STRING,
+	 PickupTime              TIMESTAMP,
+	 PickupLocationId        INT,
+	 CabLicense              STRING,
+	 DriverLicense           STRING,
+	 PassengerCount          INT,
+	 DropTime                TIMESTAMP,
+	 DropLocationId          INT,
+	 RateCodeId              INT,
+	 PaymentType             INT,
+	 TripDistance            DOUBLE,
+	 TotalAmount             DOUBLE
+)
+
+USING DELTA 
+
+LOCATION "/mnt/datalake/Output/GreenTaxis.delta"
+ 
+B -  Setup two processes that will write at the same time to Delta table.
+
+# Event Hub configuration for Reader 1
+
+eventHubReader1 = {
+ 'eventhubs.connectionString' : sc._jvm.org.apache.spark.eventhubs.EventHubsUtils.encrypt(eventHubConnectionString),
+ 
+ 'eventhubs.consumerGroup' : 'reader1'
+
+}
+ 
+# Read stream from Event Hub.
+
+rideInputDF1 = (
+
+                   spark
+				      .readstream
+					  .format ("eventhubs")
+					  .options (**eventHubReader1)
+					  .load()
+		     )						
+										
+# Extract rides information from Event Hub.
+
+rideDF1 = (
+                rideInputDF1
+				   .select(from_json (col("body").cast ("string"),rideSchema)  .alias ("taxidata")))
+						
+						.select ( "taxidata.RideId", "taxidata.VendorId","taxidata.EventType", "taxidata.PickupTime", "taxidata.CabLicense",
+								   "taxidata.DriverLicense", "taxidata.PickupLocationId","taxidata.PassengerCount", "taxidata.RateCodeId",
+								   "taxidata.DropTime","taxidata.DropLocationId","taxidata.TripDistance",  "taxidata.PaymentType",
+								   "taxidata.TotalAmount")
+							
+	)
+
+									   
+# Filter records where VendorId = 1
+
+rideDF1 = (
+                  rideDF1
+				     .where ("VendorId = 1")
+					 
+	      )
+
+
+
+C. - Prepare Process 2 : Works with VendorIds other than 1
+
+eventHubReader2 = {
+ 'eventhubs.connectionString' : sc._jvm.org.apache.spark.eventhubs.EventHubsUtils.encrypt(eventHubConnectionString),
+ 
+ 'eventhubs.consumerGroup' : 'reader2'
+
+}
+ '
+# Read stream from Event Hub.
+
+rideInputDF2 = (
+
+                   spark
+				      .readstream
+					  .format ("eventhubs")
+					  .options (**eventHubReader2)
+					  .load()
+		     )						
+
+rideDF2 = (
+                rideInputDF2
+				   .select(from_json (col("body").cast ("string"),rideSchema)  .alias ("taxidata")))
+						
+						.select ( "taxidata.RideId", "taxidata.VendorId","taxidata.EventType", "taxidata.PickupTime", "taxidata.CabLicense",
+								   "taxidata.DriverLicense", "taxidata.PickupLocationId","taxidata.PassengerCount", "taxidata.RateCodeId",
+								   "taxidata.DropTime","taxidata.DropLocationId","taxidata.TripDistance",  "taxidata.PaymentType",
+								   "taxidata.TotalAmount")
+							
+	)
+
+									   
+# Filter records where VendorId <> 1
+
+rideDF2 = (
+                  rideDF2
+				     .where ("VendorId <> 1")
+					 
+	      )
+
+
+So now we have two Writers that are working with 2 datasets.
+
+(
+    rideDF1
+         .writeStream
+         .format ("delta")
+         .outputMode("append")
+         .option ("checkpointLocation", "/mnt/datalake/Output/Checkpoints/GreenTaxisInsert1")
+         .table ("TaxisDB.GreenTaxis")
+)
+
+
+(
+    rideDF2
+         .writeStream
+         .format ("delta")
+         .outputMode("append")
+         .option ("checkpointLocation", "/mnt/datalake/Output/Checkpoints/GreenTaxisInsert2")
+         .table ("TaxisDB.GreenTaxis")
+)
+
+
+-- Start the sample application from command line.
+
+-- Note that data is being added for VendorId 1 by Process 1 and for VendorId 2 by Process 2.
+
+%sql
+
+SELECT VendorId 
+      , COUNT(*)
+FROM TaxisDB.GreenTaxis
+GROUP BY VendorId
+ORDER BY VendorId
+
+E - Scenario 2: Simultaneous Updates
+
+%sql
+
+TRUNCATE TABLE TaxisDB.GreenTaxis
+
+
+-- Create a function to handle updates and merge the data .
+
+  
+def writeGreenTaxiEvents1 (batchDF, batchId):
+
+  batchDF.createOrReplaceTempView("changes")
+	  
+	  (
+	       batchDF._jdf.sparkSession().sql("""
+		   
+		    MERGE INTO TaxisDB.GreenTaxis tgt
+                USING changes  src  	        ON tgt.RideId = src.RideId  AND  tgt.VendorId = 1    -- FOR VENDOR ID 1
+		 
+           -- When conditions match, update records 
+           WHEN MATCHED AND src.EventType = 'P'
+               THEN UPDATE SET  tgt.PickupTime = src.PickupTime, tgt.CabLicense = src.CabLicense , tgt.DriverLicense = src.DriverLicense,
+                                tgt.PickupLocationId=src.PickupLocationId,tgt.PassengerCount = src.PassengerCount, tgt.RateCodeId = src.RateCodeId
+								
+		   WHEN MATCHED AND src.EventType = 'D'
+                 THEN UPDATE SET tgt.DropTime = src.DropTime , tgt.DropLocationId = src.DropLocationId , tgt.TripDistance = src.TripDistance,
+                                 tgt.TotalAmount = src.TotalAmount , tgt.PaymentType = src.PaymentType
+								 
+		  -- When conditions do not match , insert record
+		  WHEN NOT MATCHED 
+		          THEN INSERT(RideId,VendorId,PickupTime,CabLicense,DriverLicense, PickupLocationId,PassengerCount, DropTime,DropLocationId,
+				              TripDistance, TotalAmount, RateCodeId , PaymentType)
+							  
+				        VALUES (RideId,VendorId,PickupTime,CabLicense,DriverLicense, PickupLocationId,PassengerCount, DropTime,DropLocationId,
+				              TripDistance, TotalAmount, RateCodeId , PaymentType)
+	
+	       """)
+		   
+	)
+    pass
+
+
+def writeGreenTaxiEvents2 (batchDF, batchId):
+
+  batchDF.createOrReplaceTempView("changes")
+	  
+	  (
+	       batchDF._jdf.sparkSession().sql("""
+		   
+		    MERGE INTO TaxisDB.GreenTaxis tgt
+                USING changes  src  	        ON tgt.RideId = src.RideId  AND  tgt.VendorId <> 1    -- FOR VENDOR IDs other than 1
+		 
+           -- When conditions match, update records 
+           WHEN MATCHED AND src.EventType = 'P'
+               THEN UPDATE SET  tgt.PickupTime = src.PickupTime, tgt.CabLicense = src.CabLicense , tgt.DriverLicense = src.DriverLicense,
+                                tgt.PickupLocationId=src.PickupLocationId,tgt.PassengerCount = src.PassengerCount, tgt.RateCodeId = src.RateCodeId
+								
+		   WHEN MATCHED AND src.EventType = 'D'
+                 THEN UPDATE SET tgt.DropTime = src.DropTime , tgt.DropLocationId = src.DropLocationId , tgt.TripDistance = src.TripDistance,
+                                 tgt.TotalAmount = src.TotalAmount , tgt.PaymentType = src.PaymentType
+								 
+		  -- When conditions do not match , insert record
+		  WHEN NOT MATCHED 
+		          THEN INSERT(RideId,VendorId,PickupTime,CabLicense,DriverLicense, PickupLocationId,PassengerCount, DropTime,DropLocationId,
+				              TripDistance, TotalAmount, RateCodeId , PaymentType)
+							  
+				        VALUES (RideId,VendorId,PickupTime,CabLicense,DriverLicense, PickupLocationId,PassengerCount, DropTime,DropLocationId,
+				              TripDistance, TotalAmount, RateCodeId , PaymentType)
+	
+	       """)
+		   
+	)
+    pass
+
+-- Run the first processes. It will call function 1 every five seconds.
+
+(
+     rideDF1
+	    .writeStream
+		
+		.foreachBatch (writeGreenTaxiEvents1)
+		
+		.outputMode ("append")
+		
+		.option ("checkpointLocation" , "/mnt/datalake/Output/Checkpoints/GreenTaxisUpdate1")
+		
+		.trigger (processingTime = '5 seconds')
+		
+		.start()
+		
+)
+
+-- Run the second processes. It will call function 2 every five seconds.
+
+
+(
+     rideDF2
+	    .writeStream
+		
+		.foreachBatch (writeGreenTaxiEvents2)
+		
+		.outputMode ("append")
+		
+		.option ("checkpointLocation" , "/mnt/datalake/Output/Checkpoints/GreenTaxisUpdate2")
+		
+		.trigger (processingTime = '5 seconds')
+		
+		.start()
+		
+)
+
+Start the sample application from command line.
+
+D:\DeltaLake\NycTaxiTelemetryApp > dotnet run 
+
+
+One process fails . There is ConcurrentAppendException.There is a conflict while updating the data.
+Because they are updating data in the same partition.
+
+This can be rectified if we ensure that Writers work with two partitions.
+
+First remove the Delta table files from the Data Lake.And Recreate the Table.
+
+dbutils.fs.rm("/mnt/datalake/Output/GreenTaxis.delta", True)
+
+%sql
+
+DROP TABLE IF EXISTS TaxisDB.GreenTaxis 
+
+
+CREATE OR REPLACE TABLE TaxisDB.GreenTaxis
+
+(
+     RideId                  INT,
+	 VendorId                INT,
+	 EventType               STRING,
+	 PickupTime              TIMESTAMP,
+	 PickupLocationId        INT,
+	 CabLicense              STRING,
+	 DriverLicense           STRING,
+	 PassengerCount          INT,
+	 DropTime                TIMESTAMP,
+	 DropLocationId          INT,
+	 RateCodeId              INT,
+	 PaymentType             INT,
+	 TripDistance            DOUBLE,
+	 TotalAmount             DOUBLE
+)
+
+USING DELTA 
+
+PARTITIONED BY (VendorId)
+
+LOCATION "/mnt/datalake/Output/GreenTaxis.delta"
+
+
+Once again run the first process. 
+
+(
+     rideDF1
+	    .writeStream
+		
+		.foreachBatch (writeGreenTaxiEvents1)
+		
+		.outputMode ("append")
+		
+		.option ("checkpointLocation" , "/mnt/datalake/Output/Checkpoints/GreenTaxisUpdate1")
+		
+		.trigger (processingTime = '5 seconds')
+		
+		.start()
+		
+)
+
+
+Then the second process .
+
+(
+     rideDF2
+	    .writeStream
+		
+		.foreachBatch (writeGreenTaxiEvents2)
+		
+		.outputMode ("append")
+		
+		.option ("checkpointLocation" , "/mnt/datalake/Output/Checkpoints/GreenTaxisUpdate2")
+		
+		.trigger (processingTime = '5 seconds')
+		
+		.start()
+		
+)
+
+Then again run the application from command line.
+
+D:\DeltaLake\NycTaxiTelemetryApp > dotnet run 
+
+There are no failures because both processes are running on different partitions.So there no concurrency issues.
+
+%sql
+
+SELECT *
+FROM TaxisDB.GreenTaxis
+WHERE  PickupTime IS NOT NULL AND DropTime IS NOT NULL
+
+
+
+
+

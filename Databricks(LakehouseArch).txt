@@ -1,0 +1,512 @@
+Building a Lakehouse Architecture 
+--------------------------------------
+
+Brings best of Data Warehouses and Data Lakes together .
+
+1. Handle all types of data .
+       - Structured, semi-structured & unstructured.
+	   
+2. Maintain data integrity & consistency
+       - Support for ACID guarantees
+	   
+3. Reduced ETL
+    -  Query multiple data sources without ETL.
+
+4. Reduced data redundancy .
+     - Have a single source of truth.
+
+5. Metadata management
+      - For data searching , tracking and sharing.
+	  
+6. Use open file formats.
+    - Parquet , CSV etc.
+	
+7. Decoupled storage & compute
+     -  Both can scale independently.
+
+8. Integrated security & governance controls
+      - Classify & protect
+
+9. Handle multiple use cases.
+     -  BI, Machine Learning , Data Science , Streaming.
+	 
+
+10.Cost effective.
+
+
+Lakehouse Layers
+----------------
+
+GOVERNANCE & SECURITY
+    - Databricks Unity Catalog
+	           - Share data using Delta Sharing protocol
+			   - Maintain data lineage
+	Build automated & trackable ETL pipelines with Delta Live tables.
+	
+	- Security 
+	     - Azure Active Directtory.
+		 - Fine-grained access controls
+		 - Row-level security on tables.
+    
+
+QUERY ENGINE - Can use variety of engines.
+                      - Apache Spark
+                      - Azure Synapse Analytics
+                      - AWS Redshift / Athena
+				      - Presto
+					  - Snowflake etc. 
+			Databricks Delta ENGINE		  
+				      - Vectorized-engine Photon
+					  - Delta caching
+					  - Optimizations
+				  
+TRANSACTION LAYER - Delta Lake 
+                      - Stores metadata
+                      - Provides ACID guarantees
+					  -Versioning with time travel
+                      -Perform DML operations
+                      - Define constraints etc.
+					  
+STORAGE LAYER
+   - Use cloud storage - AWS S3, Azure Storage / Data Lake , Google Cloud storage , etc.
+   - Low cost & scalable
+   - Store all types of data . 
+          -Structured , semi-structured , unstructured data 
+		  - Batch or streaming data 
+		  
+		  
+Inside Lakehouse - Understanding Delta Architecture
+----------------------------------------------------
+
+Delta Architecture is part of Lakehouse that intends to improve the quality of data and serve different personas like Data Scientists,
+Data Engineers , Business users ,etc. 
+
+Also called Medallion Architecture. 
+
+
+LAKEHOUSE STORAGE 
+
+
+|    BRONZE LAYER (Raw data)    |                         SILVER LAYER(Cleaned,filtered & transformed data)|            GOLD LAYER(Aggregated / Business specific data)|
+ -Structured Data Sources                                          - Store granular data in Delta format                        - Store business aggregates in Delta format.
+ -Unstructured & Streaming data sources                            - Combine data from various tables                           - Create multiple tables / views on same data
+ - Ingest and save data as-is                                      - Enrich data with additional information                    - Optimized query layer.
+ - Use this raw data for reprocessing                              - Useful for ML/ Data Science                                - Useful for BI/Reporting
+ - Becomes single-source of truth 
+ - Can be in Delta or native formats .
+   
+*** Note: These layers are not manadatory in Delta architecture .
+          We can define layers depending on our requirements . 
+
+
+Using Change Data Feed 
+-------------------------------
+
+Suppose there is a Delta Table. 
+
+Delta Table                                      Operation                                    Change Data Feed                             
+                                             - Insert row with Id=3                             - Delta table generated a Change Data Feed 
+Id(PK) | Name                                     Id(PK) |  Name                                   Id |   Name | Change Type | Time   | Version
+  1    |  A                                         3    |   C                                      3 |   C    | Insert      | 10:00  |  2
+  2    |  B                                    
+                                              - Delete row with Id=2                               Id | Name | Change Type | Time | Version
+											                                                        2 |  B   |  Delete     | 10:05|  3
+										     
+                                              
+											  - Update row where Id=1                              Id |  Name | Change Type | Time | Version 	                          										 
+											       Id(PK) |  Name                                   1 |   A   |   Preimage  |10:10 |    4
+												     1    |   AA                                    1 |   AA  | Postimage   | 10:10|    4
+
+
+Change Data Feed 
+     -   Enabled at Delta Table level.
+	 -   For each transaction , changes are recorded.
+	            -   Rows that have changed.
+				-   Metadata : DML operation & timestamp .
+				
+	-Changes are stored in subdirectory : _change_data .
+	      - Only update/delete/merge transactions are logged into this directory. Insert is not stored.
+		  
+	- Read the changes in batch or streaming queries.
+    -  Use cases 
+	      -    Merge changes incrementally between two tables.
+		  -    Use it for audit purposes. 
+		  
+		  
+Using Change Data Feed.
+------------------------------
+
+CREATE TABLE TaxisDB.PaymentTypes
+(
+
+      PaymentTypeId         INT,
+	  PaymentTypeName       STRING,
+	  IsEnabled             INT
+	  
+)
+
+USING DELTA 
+
+TBLPROPERTIES (delta.enableChangeDataFeed = true )
+
+--Run Insert statement 1 :
+
+INSERT INTO TaxisDB.PaymentTypes (PaymentTypeId , PaymentTypeName , IsEnabled )
+VALUES (1, 'Credit Card' , 1)
+
+--Run another one :
+
+INSERT INTO TaxisDB.PaymentTypes (PaymentTypeId , PaymentTypeName , IsEnabled )
+VALUES (2, 'Cash' , 1)
+
+Check table history :
+
+DESCRIBE HISTORY TaxisDB.PaymentTypes  
+
+To get Change Data Feed use 'table_changes' method.
+
+SELECT * FROM table_changes ('TaxisDB.PaymentTypes', 1) # 1 represents the version data.
+
+-- Run update statement 
+
+UPDATE TaxisDB.PaymentTypes
+SET IsEnabled = 0
+WHERE PaymentTypeId=2 
+
+-- Run Delete statement 
+
+DELETE FROM TaxisDB.PaymentTypes
+WHERE PaymentTypeId = 1
+
+SELECT * 
+
+FROM table_changes ('TaxisDB.PaymentTypes' , 3, 4) # starting version as 3 and ending version as 4
+
+ORDER BY _commit_timestamp 
+
+
+Delta Architecture:
+With Batch Data & Change Data Feed 
+                                                LAKEHOUSE STORAGE
+--------------------------------------------------------------------------------------------------------------------
+                                                                                                          
+Structured Data Sources            |   | BRONZE LAYER |     | SILVER LAYER |        | GOLD LAYER |                 |   BI
+                                   |   (Append raw data)    (Incrementally           (Overwrite with each run      |
+                                   |                         merge changes)                                        |  REPORTS
+                                   |                                                                               |
+                                   |                                                                               |  Machine Learning
+Unstructured & Streaming Data      |                                                                               |
+Sources                            |                                                                               |  Data Science
+
+
+A. Create Bronze table
+
+CREATE TABLE TaxisDB.YellowTaxis_Bronze
+(
+RideId                 INT,
+VendorId               INT,           
+PickupTime             TIMESTAMP,
+DropTime               TIMESTAMP,
+PickupLocationId       INT,
+DropLocationId         INT,
+CabNumber              STRING,
+DriveLicenseNumber     STRING,
+PassengerCount         INT,
+TripDistance           DOUBLE,
+RateCodeId             INT,
+PaymentType            INT,
+TotalAmount            DOUBLE,
+FareAmount             DOUBLE,
+Extra                  DOUBLE,
+MtaTax                 DOUBLE,
+TipAmount              DOUBLE,
+TollsAmount            DOUBLE,
+ImprovementSurcharge   DOUBLE,
+
+FileName               STRING,
+CreatedOn              TIMESTAMP
+
+)
+
+USING DELTA
+LOCATION "/mnt/datalake/Output/YellowTaxis_Bronze.delta"
+
+
+PARTITIONED BY (VendorId)  
+TBLPROPERTIES (delta.enableChangeDataFeed = true)
+
+
+A.2 Create Silver table 
+
+CREATE TABLE TaxisDB.YellowTaxis_Silver
+(
+     RideId                 INT,
+     VendorId               INT,           
+     PickupTime             TIMESTAMP,
+     DropTime               TIMESTAMP,
+     PickupLocationId       INT,
+     DropLocationId         INT,
+     CabNumber              STRING,
+     DriveLicenseNumber     STRING,
+     PassengerCount         INT,
+     TripDistance           DOUBLE,
+     TotalAmount            DOUBLE,
+
+     PickupYear             INT             GENERATED ALWAYS AS (YEAR (PickupTime)),
+     PickupMonth            INT             GENERATED ALWAYS AS (MONTH (PickupTime)),
+     PickupDay              INT             GENERATED ALWAYS AS (DAY (PickupTime)),
+
+     CreatedOn              TIMESTAMP,
+     ModifiedOn             TIMESTAMP
+)
+USING DELTA 
+LOCATION "/mnt/datalake/Output/YellowTaxis_Silver.delta"
+
+
+PARTITIONED BY (PickupLocationId)
+
+
+
+A.3 Create Gold table to store aggregations.
+
+CREATE TABLE TaxisDB.YellowTaxis_Gold
+(
+        PickupLocationId    INT,
+		DropLocationId      INT,
+		PickupYear          INT,
+		PickupMonth         INT,
+		PickupDay           INT,
+		
+		TotalRides         INT,
+		TotalDistance      DOUBLE,
+		TotalAmount        DOUBLE
+		
+)
+
+USING DELTA 
+
+LOCATION "/mnt/datalake/Output/YellowTaxis_Gold.delta"
+
+
+B. Copy Data - Complete Load 
+
+B.1 Copy Data to Bronze table
+
+COPY INTO TaxisDB.YellowTaxis_Bronze
+	
+	FROM (
+	
+	        SELECT RideId:: Int
+			 , VendorId:: Int
+			 , PickupTime:: Timestamp
+			 , DropTime:: Timestamp
+			 , PickupLocationID:: Int
+			 , DropLocationID:: Int
+			 , CabNumber:: String
+			 , DriverLicenseNumber:: String
+			 , PassengerCount:: Int
+			 , TripDistance:: Double
+			 , RateCodeId:: Int
+			 , PaymentType:: Int
+			 , TotalAmount:: Double
+			 , FareAmount:: Double
+			 , Extra:: Double
+			 , MtaTax:: Double
+			 , TipAmount:: Double
+			 , TollsAmount:: Double
+			 , ImprovementSurcharge:: Double
+			 
+			 ,INPUT_FILE_NAME()   AS FileName
+			 ,CURRENT_TIMESTAMP() AS CreatedOn
+			 
+	       FROM  '/mnt/datalake/Raw/YellowTaxis/' 
+		   
+		 )
+		 
+		 FILEFORMAT= CSV
+		 FORMAT_OPTIONS ('header' = 'true')
+		 
+		 
+Check table history 
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis_Bronze 
+
+SELECT * FROM table_changes ('TaxisDB.YellowTaxis_Bronze', 1) # version as 1
+
+-- Create a temporary view called Bronze Changes.
+
+CREATE OR REPLACE TEMPORARY VIEW BronzeChanges
+AS 
+
+SELECT * 
+FROM table_changes ('TaxisDB.YellowTaxis_Bronze',1)
+
+WHERE TotalAmount > 0
+  AND TripDistance > 0
+  
+B.2 Incrementally move data to Silver table 
+
+MERGE INTO TaxisDB.YellowTaxis_Silver tgt
+ 
+      USING BronzeChanges  src  	  ON tgt.VendorId = src.VendorId  AND  tgt.RideId = src.RideId
+		 
+-- Update row if join conditions match 
+   WHEN MATCHED 
+       THEN 
+           UPDATE SET     tgt.PickupTime = src.PickupTime, tgt.DropTime = src.DropTime , tgt.PickupLocationId = src.PickupLocationId, 
+			              tgt.DropLocationId = src.DropLocationId, tgt.CabNumber=src.CabNumber, 
+                          tgt.DriveLicenseNumber=src.DriveLicenseNumber, tgt.PassengerCount=src.PassengerCount,
+                          tgt.TripDistance=src.TripDistance, tgt.TotalAmount=src.TotalAmount,
+
+                          tgt.ModifiedOn = CURRENT_TIMESTAMP()						  
+	   
+-- Insert row if row is not present in target table.
+
+   WHEN NOT MATCHED 
+      	THEN 
+		    INSERT (RideId,VendorId,PickupTime,DropTime,PickupLocationId,DropLocationId,CabNumber,DriverLicenseNumber,PassengerCount,TripDistance,
+	                TotalAmount, CreatedOn, ModifiedOn)
+    
+	        VALUES (RideId,VendorId,PickupTime,DropTime,PickupLocationId,DropLocationId,CabNumber,DriverLicenseNumber,PassengerCount,TripDistance,
+	                TotalAmount,CURRENT_TIMESTAMP(),CURRENT_TIMESTAMP())
+					
+B.3  Write data in Gold table -  Aggregation data 
+
+INSERT OVERWRITE TABLE TaxisDB.YellowTaxis_Gold 
+
+    SELECT PickupLocationId, DropLocationId , PickupYear , PickupMonth , PickupDay 
+  
+                         , COUNT(RideId)  AS TotalRides
+                         , SUM(TripDistance) AS TotalDistance
+                         , SUM (TotalAmount) AS TotalAmount
+						 
+    FROM  TaxisDB.YellowTaxis_Silver 						 
+
+    GROUP BY PickupLocationId, DropLocationId, PickupYear, PickupMonth , PickupDay 
+	
+	
+We can also write incremental changes to Gold. Capture changes from the Silver table and Merge to Gold.
+
+How Incremental update will work ?
+
+In the Azure portal add another file to the same folder (YellowTaxis2.csv) . Think of it as another file added the next day.
+
+
+
+C. Copy Data - Incremental load. Copy command keeps a track of files it has loaded. So only the new file will be loaded.
+
+C.1 Copy data from new file only to Bronze table.
+
+COPY INTO TaxisDB.YellowTaxis_Bronze
+	
+	FROM (
+	
+	        SELECT RideId:: Int
+			 , VendorId:: Int
+			 , PickupTime:: Timestamp
+			 , DropTime:: Timestamp
+			 , PickupLocationID:: Int
+			 , DropLocationID:: Int
+			 , CabNumber:: String
+			 , DriverLicenseNumber:: String
+			 , PassengerCount:: Int
+			 , TripDistance:: Double
+			 , RateCodeId:: Int
+			 , PaymentType:: Int
+			 , TotalAmount:: Double
+			 , FareAmount:: Double
+			 , Extra:: Double
+			 , MtaTax:: Double
+			 , TipAmount:: Double
+			 , TollsAmount:: Double
+			 , ImprovementSurcharge:: Double
+			 
+			 ,INPUT_FILE_NAME()   AS FileName
+			 ,CURRENT_TIMESTAMP() AS CreatedOn
+			 
+	       FROM  '/mnt/datalake/Raw/YellowTaxis/' 
+		   
+		 )	
+		 
+		 FILEFORMAT= CSV
+		 FORMAT_OPTIONS ('header' = 'true')
+
+Check Bronze History.
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis_Bronze 
+
+# The latest commit version is 2.
+
+CREATE OR REPLACE TEMPORARY VIEW BronzeChanges
+AS
+
+SELECT *
+
+FROM table_changes ('TaxisDB.YellowTaxis_Bronze', 2)
+
+WHERE  TotalAmount > 0
+
+    AND TripDistance > 0 
+	
+
+C.2  Incrementally move data to Silver table
+
+MERGE INTO TaxisDB.YellowTaxis_Silver tgt
+ 
+      USING BronzeChanges  src  	  ON tgt.VendorId = src.VendorId  AND  tgt.RideId = src.RideId
+		 
+-- Update row if join conditions match 
+   WHEN MATCHED 
+       THEN 
+           UPDATE SET     tgt.PickupTime = src.PickupTime, tgt.DropTime = src.DropTime , tgt.PickupLocationId = src.PickupLocationId, 
+			              tgt.DropLocationId = src.DropLocationId, tgt.CabNumber=src.CabNumber, 
+                          tgt.DriveLicenseNumber=src.DriveLicenseNumber, tgt.PassengerCount=src.PassengerCount,
+                          tgt.TripDistance=src.TripDistance, tgt.TotalAmount=src.TotalAmount,
+
+                          tgt.ModifiedOn = CURRENT_TIMESTAMP()						  
+	   
+-- Insert row if row is not present in target table.
+
+   WHEN NOT MATCHED 
+      	THEN 
+		    INSERT (RideId,VendorId,PickupTime,DropTime,PickupLocationId,DropLocationId,CabNumber,DriverLicenseNumber,PassengerCount,TripDistance,
+	                TotalAmount)
+    
+	        VALUES (RideId,VendorId,PickupTime,DropTime,PickupLocationId,DropLocationId,CabNumber,DriverLicenseNumber,PassengerCount,TripDistance,
+	                TotalAmount)
+
+
+C3. Rewrite data in Gold table.
+
+INSERT OVERWRITE TABLE TaxisDB.YellowTaxis_Gold 
+
+    SELECT PickupLocationId, DropLocationId , PickupYear , PickupMonth , PickupDay 
+  
+                         , COUNT(RideId)  AS TotalRides
+                         , SUM(TripDistance) AS TotalDistance
+                         , SUM (TotalAmount) AS TotalAmount
+						 
+    FROM  TaxisDB.YellowTaxis_Silver 						 
+
+    GROUP BY PickupLocationId, DropLocationId, PickupYear, PickupMonth , PickupDay 
+ 
+  
+  
+ 
+
+
+
+
+
+
+
+
+
+
+
+	  
+
+
+
+	
+													 

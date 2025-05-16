@@ -1,0 +1,2217 @@
+#Data Lake is a central repository to store all types of data at any scale , in the form of files.
+
+# How Spark writes to Data Lake ?
+
+We have a Spark cluster and a data lake .
+
+Job (process sales data)
+
+Spark will create a job divided into multiple , parallel tasks to write multiple, partitioned files parallely to the Data Lake folder.
+
+                        |-Task1-------------------------------> part-000.csv    } (partition files)
+                        |- Task2------------------------------> part-001.csv    }
+Job (process sales data)|- Task3------------------------------> part-002.csv    }DATA LAKE
+                        |-Task4-------------------------------->part-003.csv    }
+						
+#ACID guarantees on transactions.
+Atomicity - All or no changes are written .
+Consistency - Data always remains in valid state before and after the transaction.
+Isolation - Transaction must run isolated from other processes. Any data written by the writer should not be visible to the Reader till it is committed.
+Durability - Once committed , data persists even if system fails.
+
+Data Lakes does not provide ACID guarantees.
+In Spark overwrite is a 2 step process. Delete existing + write two new part files.
+
+Challenges with Data Lake.
+- Data corruption because of failures - no rollback.If the writer process writes part-002 but fails in writing part-003 due to job failure at runtime
+  then the Reader will only read part files 1,2 & 3 . This is inconsistent read.
+  
+- No data validation while writing. So a column could be written as integer in one transaction and string in another.
+
+- Consistency issues while reading data. In Spark overwriting data means deleting existing data. Suppose a process is writing two part files -
+    part001 & part002 . Job fails with runtime error. New part file2 could not be written. Reader process reads part001 file only. It reads 
+	Inconsistent data + Previous data is lost. This breaks Atocmicity, Consistency and Durability.
+	
+- Handling Batch and Streaming data together is tough.
+- No updates / deletes / merge on files.(Difficult to implement GDPR/CCPA compliance).
+- Data quality issues.- Schema isn't verified before writing.
+                      - Cannot apply checks on data (like in the databases)
+- Query performance issues.
+- Difficult to maintain historical versions of data.
+
+
+Delta Lake can help solve these challenges. Apache Iceberg and Apache Hudi that works similarly to Delta Lake.
+Delta Lake is an open source storage layer that brings reliability to Data Lakes.
+We need to deploy the Delta Lake component in Spark cluster.
+Data from a dataframe will be written using delta format and stored as Parquet files along with transaction log.
+
+Save Dataframe in Delta format.
+
+(
+dataframe
+   .write 
+   .format("delta") # like other formats - csv , parquet , etc.
+   .save (filepath)
+   
+)
+
+Suppose we want to store Customer data in delta format inside Customer folder. Spark will create a _delta_log subfolder where the transaction log will be stored.
+
+Write operation 1 (write 2 part files) - > part-000.parquet and part-001.parquet. Since we are creating in delta format Spark will also create a file called
+000.json that will be stored in the _delta_log subfolder and contain transaction log data.
+
+Write operation 2 (append 1 part file) part-002.parquet and 001.json in the  _delta_log subfolder.
+
+Write operation 3 (append 1 part file) part-003.parquet and 002.json in the  _delta_log subfolder.
+
+For update operation(update in part-000 , modify A to AA where Id=1) . A new part file will be created(part-004) , all modifications along with 
+ unchanged data from part-000 will be written to part-004 . Part-000 file will be removed.So when log files are read first it will read 
+ part-000, then part-001,002,003 and 004. But it will only consider data from part-001,002,003 and 004 since part-000 has been updated and hence
+ will be deleted.
+
+For each write operation part files are written first and then a transaction log file is added in json format to _delta_log folder.
+Transaction logs contain the details of every transaction that has been performed on the file.
+
+For each read operation first transaction log files are read and part files are then read based on log files.First each all log files - 000.json,001.json , 002.json
+and then read 4 part files based on log information. It contains information like operation and file name.
+For Update operation log file will contain 2 operations - Remove and add - Remove part1 and add part4.
+
+Delta Lake features - 
+Provides ACID guarantees 
+- No data corruption because of failures.
+- Data consistency while reading data.
+- Job failure in appending data . Suppose the writer process is adding two more part part-003 and part-004 . Part-003 is written but part-004
+  could not be written due to job failure at run time. The _delta_log (000.json) will only contains information about part-000 and part-001.
+  It will contain no information about the failed transaction.(part-003 & 004)and the Reader will read as such.
+  In Delta Lake while overwriting , existing files are not deleted. So if there is a job failure and new part file 4 could not be written, the Reader 
+  while reading _delta_log(000.json) will only read part files 1 & 2. So it reads consistent data + previous data is not lost.
+  
+- Simultaneous Read / Write - Two part files (001 & 002) are already written by previous transaction(_delta_log(000.json)).Writer writes two more 
+  part files using 2 tasks. Only 003 is written and 004 is getting processed. Simultaneously Reader reads log file while writing is in progress.
+  (reads 000.json) . It only reads Part files 1 & 2. No dirty reads while writing is in progress. Writer process is running in isolation.
+  Once file 4 (004) is ready it will be added to the folder and an entry will be made in the transaction log(001.json).
+
+Perform inserts/updates/ deletes.
+
+Schema enforcement and evolution.
+
+Protect data using Time Travel.
+
+Handle batch & streaming data together.
+
+Apply data quality checks.
+
+Performance improvements using statistics.
+
+
+For Job failure in overwriting data existing files are not deleted in Delta format. Log files contains details of only complete and not 
+partial transactions.
+
+from pyspark.sql import SparkSession
+from pyspark.sql.types import *
+from pyspark.sql.functions import *
+
+spark = (
+             SparkSession
+			     .builder
+				 .appName("DeltaLakeApp")
+				 
+				 .master("local[4]")
+				 .config("spark.dynamicAllocation.enabled", "false")
+				 
+			#Add package for Delta Lake
+			     .config("spark.jars.packages", "io.delta:delta-core_2.12:2.2.0")
+				 
+			#Add settings to use Delta Lake with Spark session.	 
+				 
+		        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+				.config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+				.getOrCreate()
+				
+       )
+sc=spark.sparkContext
+
+spark
+				 
+#Create schema for Yellow taxi data.
+
+# Read Yellow Taxis file.
+
+yellowTaxiDF= (
+                spark
+				    .read
+					.option("header" , "true")
+					.schema(yellowTaxiSchema)
+					.csv("C:\SparkCourse\DataFiles\Raw\YellowTaxis_202210.csv")
+					
+			)
+			
+# Print Schema of DataFrame
+yellowTaxiDF.printSchema()
+
+
+# Create database in metastore
+spark.sql(""" 
+CREATE DATABASE IF NOT EXISTS TaxisDB
+""")
+
+# Parquet format : Save DataFrame as a Table.
+
+(
+    yellowTaxiDF
+	       .write
+		   .mode("overwrite")
+		   .partitionBy("VendorId")
+		   .format("parquet")
+		   .option("path", "C:\SparkCourse\DataFiles\Output\YellowTaxis.parquet")
+		   .saveAsTable("TaxisDB.YellowTaxisParquet")
+)
+
+#Delta format : Save DataFrame as a Table.
+
+from delta import *
+
+(
+    yellowTaxiDF
+	       .write
+		   .mode("overwrite")
+		   .partitionBy("VendorId")
+		   .format("delta")
+		   .option("path", "C:\SparkCourse\DataFiles\Output\YellowTaxis.delta")
+		   .saveAsTable("TaxisDB.YellowTaxis")
+)
+
+Open the path where data has been saved. In the output folder there are 2 folders - one for parquet and one for delta.
+
+# Audit history of delta tables.
+spark.sql(""" 
+DESCRIBE HISTORY TaxisDB.YellowTaxis
+""").show(truncate=False)
+
+
+Overwrite data in Delta table.
+
+# Overwrite data by rerunning the command.
+
+(
+    yellowTaxiDF
+	       .write
+		   .mode("overwrite")
+		   .partitionBy("VendorId")
+		   .format("delta")
+		   .option("path", "C:\SparkCourse\DataFiles\Output\YellowTaxis.delta")
+		   .saveAsTable("TaxisDB.YellowTaxis")
+)
+
+It will not replace the existing files. 
+
+
+Create table using DDL command and later add the data.
+
+spark.sql("""
+
+CREATE TABLE TaxisDB.yellowTaxis
+(
+
+VendorId               INT           COMMENT 'Vendor providing the ride' ,
+
+PickupTime             TIMESTAMP,
+DropTime               TIMESTAMP,
+
+PickupLocationID       INT               NOT NULL,
+DropLocationID         INT,
+
+PassengerCount         DOUBLE,
+TripDistance           DOUBLE,
+
+RateCodeId             DOUBLE,
+StoreAndFwdFlag        STRING,
+PaymentType            INT,
+
+FareAmount             DOUBLE,
+Extra                  DOUBLE,
+MtaTax                 DOUBLE,
+TipAmount              DOUBLE,
+TollsAmount            DOUBLE,
+ImprovementSurcharge   DOUBLE,
+TotalAmount            DOUBLE,
+CongestionSurcharge    DOUBLE,
+AirportFee             DOUBLE
+
+)
+
+USING DELTA           -- default is Parquet
+LOCATION "C:/SparkCourse/DataFiles/Output/YellowTaxis.delta/"
+
+PARTITIONED BY (VendorId)  --optional
+
+COMMENT 'This table stores ride information for Yellow Taxis'
+
+""")
+
+spark.sql("""
+DESCRIBE TABLE EXTENDED TaxisDB.YellowTaxis
+""").show(50, truncate=False)
+
+Inserting data to Delta table.
+
+spark.sql("""
+
+SELECT *
+FROM TaxisDB.YellowTaxis
+
+""").show()
+
+#Check the transaction log.
+
+spark.sql("""
+DESCRIBE HISTORY TaxisDB.YellowTaxis
+""").show(truncate=False)
+
+# Append to data Lake in delta format.
+
+(
+
+yellowTaxiDF
+    .write
+	
+	.mode("append")
+	
+	.partitionBy("VendorId")
+	.format("delta")
+	.save("C:\SparkCourse\DataFiles\Output\YellowTaxis.delta")
+)
+
+Check the count .
+
+spark.sql("""
+
+SELECT COUNT(1) 
+FROM TaxisDB.YellowTaxis
+
+""").show()
+
+Performing DML operations.
+----------------------------------------------------------------
+
+#Run update , delete and merge on Delta tables.
+
+Check files holding the data.
+
+spark.sql("""
+
+SELECT INPUT_FILE_NAME()
+
+       ,VendorId
+	   ,PickupLocationID
+	   ,PassengerCount
+	   
+FROM TaxisDB.YellowTaxis
+
+WHERE VendorId = 3
+
+""").show(truncate=False)
+
+
+#Run UPDATE statement to change passenger count.
+
+spark.sql("""
+
+UPDATE TaxisDB.YellowTaxis
+
+SET PassengerCount = 2
+
+WHERE VendorId = 3
+     AND PickupLocationID = 249
+	 
+""").show()
+
+# Check passenger count after update.
+
+spark.sql("""
+
+SELECT VendorId
+     , PickupLocationID
+	 , PassengerCount
+	 
+FROM TaxisDB.YellowTaxis
+
+WHERE VendorId = 3
+      AND PickupLocationID = 249
+
+""").show()
+
+
+spark.sql("""
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis
+
+""").show(truncate=False)
+
+
+DELETE command
+
+#check if record exists
+
+spark.sql("""
+
+SELECT VendorId
+     , PickupLocationID
+	 , PassengerCount
+	 
+FROM TaxisDB.YellowTaxis
+
+WHERE VendorId = 3
+      AND PickupLocationID = 151
+	  
+""").show()
+
+# Delete the record.
+
+spark.sql("""
+
+DELETE FROM TaxisDB.YellowTaxis
+
+WHERE VendorId = 3
+      AND PickupLocationID = 151
+
+""").show()
+
+#Verify
+
+spark.sql("""
+
+SELECT VendorId
+     , PickupLocationID
+	 , PassengerCount
+	 
+FROM TaxisDB.YellowTaxis
+
+WHERE VendorId = 3
+      AND PickupLocationID = 151
+	  
+""").show()
+
+
+# Check transaction log.
+
+spark.sql("""
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis
+
+""").show(truncate=False)
+
+
+MERGE command
+
+#Extract changed records from Storage/Data Lake.
+
+yellowTaxiChangesDF = (
+                        spark
+						  .read
+						  .option ("header", "true")
+						  .schema(yellowTaxiSchema)
+						  .csv("C:\SparkCourse\DataFiles\Raw\YellowTaxis_changes.csv")
+				    )
+						  
+yellowTaxiChangesDF.show()
+
+
+yellowTaxiChangesDF.createOrReplaceTempView("YellowTaxiChanges")
+
+spark.sql("""
+
+SELECT *
+FROM YellowTaxiChanges
+
+""").show()
+
+
+spark.sql("""
+
+MERGE INTO TaxisDB.YellowTaxis tgt
+
+    USING YellowTaxiChanges    src
+	
+	   ON tgt.VendorId = src.VendorId
+	    AND tgt.PickupLocationID = src.PickupLocationID
+		
+-- update row if join conditions match
+
+WHEN MATCHED 
+
+   THEN 
+       UPDATE SET tgt.PaymentType = src.PaymentType 
+	   
+	                                    -- Use 'UPDATE SET *' to update all columns
+										
+-- Insert row if row is not present in target table
+WHEN NOT MATCHED 
+     AND PickupTime >= '2022-03-01'
+
+        THEN 
+		    INSERT (VendorId , PickupTime, DropTime,PickupLocationID,DropLocationID,PassengerCount,RateCodeId,StoreAndFwdFlag,PaymentType,FareAmount,
+			        Extra,MtaTax,TipAmount,ImprovementSurcharge,TotalAmount,CongestionSurcharge,AirportFee)
+					
+		    VALUES (VendorId , PickupTime, DropTime,PickupLocationID,DropLocationID,PassengerCount,RateCodeId,StoreAndFwdFlag,PaymentType,FareAmount,
+			        Extra,MtaTax,TipAmount,ImprovementSurcharge,TotalAmount,CongestionSurcharge,AirportFee)
+					
+					
+""").show()
+     
+    
+TABLE CONSTRAINTS (Constraints on Delta Table)
+
+-- NOT NULL and CHECK
+
+-- Define NOT NULL constraint on column to avoid insertion of null values.
+
+-- Drop the constraint here which was previously created.
+
+spark.sql("""
+
+ALTER TABLE TaxisDB.YellowTaxis
+           CHANGE COLUMN PickupLocationID DROP NOT NULL
+""").show()
+
+
+# At the time of recording , Open Issue: https://github.com/delta-io/delta/issues/831
+# Does not allow to set column as null after table creation.
+
+#Check the transaction log.
+
+
+spark.sql("""
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis
+
+""").show(truncate=False)
+
+
+CHECK constraint
+
+spark.sql("""
+
+ALTER TABLE TaxisDB.YellowTaxis
+
+      ADD CONSTRAINT PassengerCountCheck CHECK (PassengerCount <= 5)
+	  
+""").show()
+
+
+# It will throw exception as the table has passenger count already more than 5.
+
+spark.sql("""
+
+ALTER TABLE TaxisDB.YellowTaxis
+
+      ADD CONSTRAINT PassengerCountCheck CHECK (PassengerCount <= 9 OR PassengerCount IS NULL)
+	  
+""")
+
+# Verify by trying to insert passenger count = 20.
+
+
+spark.sql("""
+
+INSERT INTO TaxisDB.YellowTaxis
+		    --VendorId , PickupTime, DropTime,PickupLocationID,DropLocationID,PassengerCount,RateCodeId,StoreAndFwdFlag,PaymentType,FareAmount,
+			        --Extra,MtaTax,TipAmount,ImprovementSurcharge,TotalAmount,CongestionSurcharge,AirportFee
+
+VALUES (3 , '2022-12-01T00:00:00.000Z' , '2022-12-01T00:15:34.000Z' , 170 , 140,
+                  
+	    20 --PassengerCount
+       
+        2.9, 1.0, '1', 1, 13.0 , 0.5 , 0.5 , 1.0 , 0.0 , 0.3 , 15.3 , 0.0, 0.0)
+
+""")
+
+#DROP CONSTRAINT
+
+spark.sql("""
+
+ALTER TABLE TaxisDB.YellowTaxis
+
+      DROP CONSTRAINT PassengerCheck
+	  
+""")		
+
+# CHECK LOG
+
+spark.sql("""
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis
+
+""").show(truncate=False)
+
+
+ACCESSING DATA WITH TIME TRAVEL.
+
+CUSTOMERS (folder)                     _delta_log (subfolder)
+                        
+part000.parquet                          000.json(10:00AM)  |   Reads Version 1
+part001.parquet                                             |
+                                                            |
+part002.parquet                          001.json(10:10AM)  |
+part003.parquet                          002.json(10:20AM)  |
+
+
+SELECT *
+
+FROM CUSTOMERS VERSION AS OF 1
+
+
+SELECT *
+
+FROM CUSTOMERS TIMESTAMP AS OF '2022-03-01 10:05'
+
+TimeTravel allows to access / restore previous snapshot of data , even if data has been modified or deleted.
+
+Update a record .
+
+# Check passenger count before update.
+
+spark.sql("""
+
+SELECT PassengerCount
+
+FROM TaxisDB.YellowTaxis
+
+WHERE VendorId = 3 
+      AND PickupLocationID = 1
+""").show()
+
+
+#Update passenger count.
+
+
+spark.sql("""
+
+UPDATE TaxisDB.YellowTaxis
+
+SET PassengerCount = 1
+
+WHERE VendorId = 3
+     AND PickupLocationID = 1
+	 
+""").show()
+
+# Check table history.
+
+
+spark.sql("""
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis
+
+""").show(truncate=False)
+
+
+#TimeTravel: Access using version number.
+
+#Check at initial version
+
+spark.sql("""
+
+SELECT PassengerCount
+
+FROM TaxisDB.YellowTaxis   VERSION AS OF 0
+
+WHERE VendorId = 3 
+      AND PickupLocationID = 1
+""").show()
+
+
+# Check at one prior version.
+
+spark.sql("""
+
+SELECT PassengerCount
+
+FROM TaxisDB.YellowTaxis   VERSION AS OF 9
+
+WHERE VendorId = 3 
+      AND PickupLocationID = 1
+""").show()
+
+#TimeTravel: Access using Timestamp.
+
+spark.sql("""
+
+SELECT PassengerCount
+
+FROM TaxisDB.YellowTaxis   TIMESTAMP AS OF '2023-03-12 22:39:00'
+
+WHERE VendorId = 3 
+      AND PickupLocationID = 1
+	  
+""").show(truncate=False)
+
+# Restore table to older version.
+
+spark.sql("""
+
+RESTORE TABLE TaxisDB.YellowTaxis  TO VERSION AS OF 9 
+
+""").show(truncate=False)
+
+
+# Check log.
+
+spark.sql("""
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis
+
+""").show(truncate=False)
+
+# Check data after restore
+
+spark.sql("""
+
+SELECT PassengerCount
+
+FROM TaxisDB.YellowTaxis
+
+WHERE VendorId = 3 
+      AND PickupLocationID = 1
+	  
+""").show()
+
+
+
+DELTA LAKE WITH AZURE DATABRICKS
+--------------------------------------
+
+Data Lake is a central repository to store all types of data at any scale in the form of files.
+
+Delta Ecosystem ->
+
+1. Delta Lake Storage . 
+     - Open source storage layer that runs on Data Lake.
+	 - Adds transaction log along with data (partition) files.
+	 - Brings Warehouse like features to data lake.
+	 - All other components depends on this.
+	 
+2. Delta Engine - >
+     - Only available in Databricks.
+	 - High Performance , vectorized query engine - Photon
+	 - Brings a caching feature called Delta Cache.
+	 - Has optimizations to improve query performance.
+
+3. Delta Sharing ->
+    - Open source protocol for sharing Delta Lake data.
+	- Securely share data in real-time stored in S3, ADLS , GCS etc.
+	- Consume shared data using multiple engines like Spark, Rust , PowerBI, Pandas , etc.
+	
+4. Delta Connectors ->
+   - Open-source connectors to connect to Delta Lake.
+   - Delta Standalone is a native library to work with Delta Lake metadata. 
+   - Connectors - Rust library , Kafka ingest , Hive , Presto , PowerBI, etc.
+   
+ 5. Delta Architecture ->
+   - Architecture built using Delta Lake Storage.
+   - Improves Data Quality.
+   - Serves data to business users , data scientists etc.
+   - This is part of Lakehouse architecture. 
+ 
+ 6. Delta Live Tables ->
+    - Only available in Databricks.
+	- Framework to build data processing pipelines.
+	- Perform transformations and enforce data quality.
+	- Use this feature to quickly build Delta architecture.
+	
+ visit github.com/delta-io to check open source projects .
+ 
+ Steps to set up Databricks environment.
+ 
+ 1. Setup Azure Data Lake Gen2 account.
+         - Copy account & container names.
+		 
+ 2. Upload files into Data Lake.
+ 
+ 3. Create Azure AD App (Service Principal)
+          - Copy CientId, Client Secret , Tenant Id.
+		  
+ 4. Grant access to Azure AD App on Data Lake.
+ 
+ 5.  Create Azure Databricks Workspace.
+ 
+ 6.  Mount Data Lake with Databricks workspace.
+        - Using Azure AD credentials.
+		
+ 
+ a)Go to Azure portal . 
+ b) Go to PowerShell feature .
+ c) Click on the upload - download file button . Select the button and upload a Powershell file.
+ d) Create a Resource Group . PS > $RGName= "PSDeltaLakeDemoRG" , $Location= "eastus2".
+ e) Now run the script. PS > ./1-ResourceGroup.ps1
+ f) Create Data Lake storage Gen2 account. PS> $StorageName="pltaxidatalake",
+ g) Run the script. PS> ./2-Storage.ps1
+ h) Create a new container . ('taxidata')
+ i) Open the container and create a directory 'Raw'. Create subfolders like 'Ratecodes', 'YellowTaxis' , 'YelloTaxis_Additional','YellowTaxisParquet'.
+ j) Create a Azure AD application . This will act like a Service account.
+    PS> Connect-AzureAD
+	PS> $AppName = "ps-databricksapp"
+ k) Run the script - ./3-AzureADApp.ps1
+ l) Will generate the ClientId, ClientSecret, TenantId.These will be required for mounting.
+ m)Run another script to grant permission - ./4-RoleAssignment.ps1 . This will assign the role - Storage Blob Data Contributor .
+   Azure AD app now has access to read and write files from the Data Lake.
+ n) Create a Azure Databricks Workspace . PS>  $DatabricksWorkspaceName = "PSWorkspace"
+ o) Run script PS> ./5-DatabricksWorkspace.ps1
+ 
+ p) Now search and click the Workspace to access Databricks Workspace.
+ q) Create Cluster. (Databricks Runtime Version is a collection of libraries installed in the Cluster)
+ r) Create or import Notebook(import the downloaded notebooks)
+ s) Write code to mount Data Lake Gen2 Account as file system in Databricks. 
+     - In the configs = { 
+	                                    }
+	In 'configs' replace the values carefully - "client id" , "client secret" , "tenant Id".
+
+  # Mount the Data Lake Gen2 account
+    dbutils.fs.mount(
+        source = "abfss://taxidata@pltaxidatalake.dfs.core.windows.net/",
+        mount_point = "mnt/datalake",
+        extra_configs=configs)
+
+ t) Data Lake is mounted to Databricks . Verify - %fs ls /mnt/datalake/Raw . Mount point will act like a shortcut to access DataLake.
+ 
+ # WORKING WITH DELTA LAKE STORAGE.
+ ---------------------------------------------------------------
+    - Storing Data in Delta Format .
+	a) Directly to Data Lake.
+	   - File stored in Parquet format in Data Lake.
+	   - Transaction log is stored.
+	   - No metadata registered.
+	   - To query read data from Data Lake.
+	   
+	b) As Spark (Delta) Table.
+       - Files stored in Parquet format in Data Lake.
+	   - Transaction log is stored.
+	   - Metadata registered with Hive metastore.
+	   - To query, either read data from Data Lake or directly reference the table. 
+	   
+	Storing data in Delta format & creating Tables.
+	- A) Read Data from Data Lake.
+	 
+	 %python
+	 
+	 #Create schema for Green Taxi data
+	 
+	 from pyspark.sql.functions import *
+	 from pyspark.sql.types import *
+	 
+	 yellowTaxiSchema = (
+	                          StructType()
+							  
+							  .add("RideId", "integer")
+							  
+							  .add("VendorId", "integer")
+							  
+							  .add("PickupTime","timestamp")
+							  .add("DropTime","timestamp")
+							  
+							  .add("PickupLocationID", "integer")
+							  .add("DropLocationID", "integer")
+							  
+							  .add("CabNumber", "string")
+							  .add ("DriverLicenseNumber", "string")
+							  
+							  .add("PassengerCount", "integer")
+							  .add("TripDistance", "double")
+							  
+							  .add("RateCodeId", "integer")
+							  .add("PaymentType", "integer")
+							  
+							  .add("TotalAmount", "double")
+							  .add("FareAmount", "double")
+							  .add("Extra", "double")
+							  .add("MtaTax", "double")
+							  .add("TipAmount", "double")
+							  .add("TollsAmount","double")
+							  .add("ImprovementSurcharge", "double")
+							  
+						)
+	
+	
+	yellowTaxiDF = (
+                      spark
+					  .read
+					  .option("header", "true")
+					  .schema(yellowTaxiSchema)
+					  .csv("/mnt/datalake/Raw/YellowTaxis/YellowTaxis1.csv")
+				)
+				
+	yellowTaxiDF.count()
+	
+	
+	%python
+	display (yellowTaxiDF)
+	
+	B.#Write data in Parquet format.
+	
+	%python
+	
+	(
+	      yellowTaxiDF
+		       .write
+			   .mode ("overwrite")
+			   
+			   .partitionBy("VendorId")
+			   
+			   .format("parquet")
+			   
+			   .save ("/mnt/datalake/Output/YellowTaxis.parquet")
+			   
+	)
+	
+    C. # Write data in Delta format.
+
+      %python
+	
+	(
+	      yellowTaxiDF
+		       .write
+			   .mode ("overwrite")
+			   
+			   .partitionBy("VendorId")
+			   
+			   .format("delta")
+			   
+			   .save ("/mnt/datalake/Output/YellowTaxis.delta")
+			   
+	)
+	
+	# Check data in Azure Data Lake.
+	
+	
+	# CREATING DELTA TABLE. 
+	--------------------------------
+	D. Options to create Delta tables.
+	    CREATE DATABASE IF NOT EXISTS TaxisDB 
+		
+	#Reference Data Location in Data Lake.(you can also use CREATE OR REPLACE TABLE / CREATE TABLE IF NOT EXISTS)
+	
+	-- Create table based on Parquet data .
+	
+	CREATE TABLE TaxisDB.YellowTaxisParquet
+	
+	    USING PARQUET 
+	
+        LOCATION "/mnt/datalake/Output/YellowTaxis.parquet"	
+	
+	
+	-- Create table based on Delta data .
+	
+	CREATE TABLE TaxisDB.YellowTaxis
+	
+	    USING DELTA 
+	
+        LOCATION "/mnt/datalake/Output/YellowTaxis.delta"	
+		
+	SELECT COUNT(*)
+	     FROM TaxisDB.YellowTaxis
+		 
+	
+	
+   # E. DESCRIBE TABLE COMMANDS 
+   
+    DESCRIBE TABLE / DESCRIBE TABLE EXTENDED / DESCRIBE DETAIL
+	
+	DESCRIBE TABLE EXTENDED TaxisDB.YellowTaxis 
+	
+	F. Audit history of Delta Table.
+	
+	  DESCRIBE HISTORY TaxisDB.YellowTaxis
+	  
+	  # Save DataFrame as a Table. 
+	  
+	  DROP TABLE TaxisDB.YellowTaxis
+	  
+	  This does not remove the files.
+	  
+	  To remove the files.This will delete the files from Data Lake.
+	  
+	  %python
+	  
+	  dbutils.fs.rm("/mnt/datalake/Output/YellowTaxis.delta", True)
+	  
+	  # Save DataFrame as Delta Table.
+	  
+	  (
+	  
+	      yellowTaxiDF
+		     .write
+	         .mode("overwrite")
+			 
+			 .partitionBy("VendorId")
+			 
+			 .format("delta")
+			 
+			 .option("path", "/mnt/datalake/Output/YellowTaxis.delta")
+			 
+			 .saveAsTable("TaxisDB.YellowTaxis")
+	)
+	
+	DESCRIBE HISTORY TaxisDB.YellowTaxis
+	
+	  %python
+	  
+	  #Overwrite data in Delta Table.
+	  
+	  (
+	  
+	      yellowTaxiDF
+		     .write
+	         .mode("overwrite")
+			 
+			 .partitionBy("VendorId")
+			 
+			 .format("delta")
+			 
+			 .option("path", "/mnt/datalake/Output/YellowTaxis.delta")
+			 
+			 .saveAsTable("TaxisDB.YellowTaxis")
+	)
+	
+In case of overwrite operations on Delta table existing part files are not deleted. It first add new part files and then adds a new entry 
+to the transaction log. 
+
+     DESCRIBE HISTORY TaxisDB.YellowTaxis
+
+	#Create table definition and add data.
+
+    DROP TABLE TaxisDB.YellowTaxis
+
+    #Remove files from Data Lake.
+
+    %python
+	
+	 dbutils.fs.rm("/mnt/datalake/Output/YellowTaxis.delta", True)
+	 
+	 
+	 CREATE TABLE TaxisDB.YellowTaxis
+	 (
+	   RideId                INT                                COMMENT 'This is the primary key column',
+	   VendorId              INT,
+							  
+	   PickupTime            TIMESTAMP,	
+       DropTime              TIMESTAMP,
+							  
+	   PickupLocationID      INT,
+	   DropLocationID        INT,
+							  
+	   CabNumber             STRING,
+	   DriverLicenseNumber   STRING,
+							  
+	   PassengerCount        INT,
+	 
+	   TripDistance          DOUBLE,
+	   RateCodeId            INT,
+	   
+	   PaymentType           INT,
+							  
+	   TotalAmount          DOUBLE,
+	   FareAmount           DOUBLE,
+	   Extra                DOUBLE,
+	   MtaTax               DOUBLE,
+	   TipAmount            DOUBLE,
+	   
+	   TollsAmount          DOUBLE,
+	  ImprovementSurcharge  DOUBLE,
+	  
+	   PickupYear           INT            GENERATED ALWAYS AS (YEAR (PickupTime))    COMMENT 'Auto-generated year from PickupTime',
+       PickupMonth          INT            GENERATED ALWAYS AS (MONTH (PickupTime))   COMMENT 'Auto-generated month from PickupTime',
+       PickupDay	        INT            GENERATED ALWAYS AS (DAY (PickupTime))     COMMENT 'Auto-generated day from PickupTime',
+  )  
+  
+  USING DELTA                     -- default in DataBricks is Delta
+  
+  LOCATION "/mnt/datalake/Output/YellowTaxis.delta"
+  
+  PARTITIONED BY (VendorId) -- optional 
+  
+  COMMENT   'This table stores ride information for Yellow Taxis'
+  
+  
+	    
+	DESCRIBE TABLE EXTENDED TaxisDB.YellowTaxis
+	
+	
+	INSERTING DATA TO DELTA TABLE.
+	---------------------------------
+	
+	Option1: Insert command 
+	
+	INSERT INTO TaxisDB.YellowTaxis
+	(RideId,VendorId,PickupTime,DropTime,PickupLocationID,DropLocationID,CabNumber,DriverLicenseNumber,PassengerCount,TripDistance,
+	 RateCodeId, PaymentType, TotalAmount, FareAmount, Extra, MtaTax, TipAmount, TollsAmount, ImprovementSurcharge)
+    
+	VALUES (9999996, 3, '2025-05-02T00:00:00.000Z','2025-05-02T00:15:34.000Z', 170,140,'TAC399', '5131685', 1, 2.9, 1, 1, 15.3, 13.0, 0.5, 0.5,
+	        1.0, 0.0, 0.3)
+			
+	
+	SELECT * FROM TaxisDB.YellowTaxis
+	
+	DESCRIBE HISTORY TaxisDB.YellowTaxis
+	
+	Option2: Append a DataFrame 
+	
+	%python
+	
+	# Extract new records from Data Lake.
+	
+	 yellowTaxisAppendDF = (
+	                             spark
+								 .read
+								 .option ("header", "true")
+								 .schema (yellowTaxiSchema)
+								 .csv("/mnt/datalake/Raw/YellowTaxis_Additional/YellowTaxis_append.csv")
+						   )
+						   
+	display (yellowTaxisAppendDF)
+	
+	
+	%python
+	
+	# Append to data lake in delta format
+	
+	(
+	  
+	      yellowTaxisAppendDF
+		     .write
+			 
+	         .mode("append")
+			 
+			 .partitionBy("VendorId")
+			 .format("delta")
+			 .save ("/mnt/datalake/Output/YellowTaxis.delta")
+	)
+	
+	SELECT *
+	FROM TaxisDB.YellowTaxis 
+	ORDER BY RideId
+	
+	#Check transaction log.
+	
+	DESCRIBE HISTORY TaxisDB.YellowTaxis
+	
+	
+	Option3: Copy Command
+	
+	Use COPY command to copy from Data Lake to Delta Table.
+	
+	COPY INTO TaxisDB.YellowTaxis 
+	         
+			 FROM '/mnt/datalake/Raw/YellowTaxis/YellowTaxis1.csv'     - If folder is provided in FROM clause , files can be specified
+			                                                           --Example: FILES = ('f1.csv', 'f2.csv', 'f3.csv')
+	         
+			 FILEFORMAT = CSV                                          -- Other options: JSON , PARQUET , AVRO , ORC, TEXT , BINARYFILE    
+	
+	         VALIDATE ALL                                              -- Other options : VALIDATE 10 rows
+			 
+			 FORMAT_OPTIONS ('header' = 'true')                        -- Several format options are available
+	                                                                   --  Generic and specific to file format.
+	
+	
+	COPY INTO TaxisDB.YellowTaxis
+	
+	FROM (
+	
+	        SELECT RideId:: Int
+			 
+			 , VendorId:: Int
+			 , PickupTime:: Timestamp
+			 , DropTime:: Timestamp
+			 , PickupLocationID:: Int
+			 , DropLocationID:: Int
+			 , CabNumber:: String
+			 , DriverLicenseNumber:: String
+			 , PassengerCount:: Int
+			 , TripDistance:: Double
+			 , RateCodeId:: Int
+			 , PaymentType:: Int
+			 , TotalAmount:: Double
+			 , FareAmount:: Double
+			 , Extra:: Double
+			 , MtaTax:: Double
+			 , TipAmount:: Double
+			 , TollsAmount:: Double
+			 , ImprovementSurcharge:: Double
+			 
+	       FROM  '/mnt/datalake/Raw/YellowTaxis/YellowTaxis1.csv' 
+		   
+		 )
+		 
+		 FILEFORMAT= CSV
+		 
+		 FORMAT_OPTIONS ('header' = 'true')
+	
+	
+    DESCRIBE HISTORY TaxisDB.YellowTaxis
+	
+	# COPY COMMAND KEEPS TRACK OF LOADED FILES AND IF WE TRY TO RELOAD SAME FILE, IT WILL IGNORE.
+	
+	# BEHAVIOUR CAN BE CHANGED BY THE FORCE PARAMETER.
+	
+	
+	#Performing DML operations : Update / Delete / Merge
+	
+	Customer (folder)                                                                  _delta_log (subfolder)
+	
+	Create operation (with two part files) .                                             000.json 
+	                                                                                    
+	Part1                   Part2                                                     | Operation | FileName
+	| Id | Name |         | Id | Name |                                               | Add       |  Part1   |
+	|  1  |  A  |         | 3  | C    |                                               | Add       |  Part2   | 
+	|  2  |  B  |         | 4  | D    | 
+	
+	
+	Update operation (Change name from A to AA where Id = 1)
+	
+	Part3                                                                           001.json
+	                                                                               | Operation | FileName |
+	|  Id | Name |                                                                 | Remove    |  Part1   | 
+	|  1  |  AA  |                                                                 |  Add      |  Part3   |
+	|  2  |  B   |
+	
+	
+	Delete operation (Delete record where Id = 3)                                  002.json
+	Part4
+	                                                                                  
+	| Id | Name |                                                               | Operation | FileName |
+	|  4 | D    |                                                               | Remove    |  Part2   |
+	                                                                            |   Add     |  Part4   |
+
+  
+  # MERGE command can perform inserts , updates and deletes in a single transaction.
+
+     A. UPDATE command 
+
+    i)    SELECT RideId
+		      , VendorId
+			  , PassengerCount
+			  
+		FROM TaxisDB.YellowTaxis
+		
+		WHERE RideId = 9999997
+		
+		
+		
+	ii)	SELECT INPUT_FILE_NAME()                  --- This function will return the file in which the records exist. 
+		
+		
+		  , *
+		FROM TaxisDB.YellowTaxis
+		
+		WHERE VendorId = 3
+		ORDER BY RideId
+		
+		
+		
+iii)	UPDATE TaxisDB.YellowTaxis
+		
+		SET PassengerCount = 2
+		
+		WHERE RideId = 9999997
+         		
+				
+iv) Verify Update 
+
+SELECT RideId
+		      , VendorId
+			  , PassengerCount
+			  
+		FROM TaxisDB.YellowTaxis
+		
+		WHERE RideId = 9999997
+		
+
+
+# Check the Data Lake from the Azure portal. 
+
+  Previously there were two files(VendorId=3 folder) but after update one more part file has been added.
+  
+# Check the _delta_log from the Azure portal.
+
+# Also 
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis 
+
+B. DELETE command 
+
+i) SELECT RideId
+		      , VendorId
+			  , PassengerCount
+			  
+		FROM TaxisDB.YellowTaxis
+		
+		WHERE RideId = 9999999
+		
+
+ii) DELETE FROM TaxisDB.YellowTaxis
+    
+	WHERE RideId = 9999999
+	
+
+iii) Verify DELETE  
+
+SELECT  RideId
+		      , VendorId
+			  , PassengerCount
+			  
+		FROM TaxisDB.YellowTaxis
+		
+		WHERE RideId = 9999999
+		
+
+iv) Check Transaction Log.
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis 
+
+C. MERGE command 
+
+%python
+# Extract changed records from Data Lake.
+
+i)yellowTaxiChangesDF =  (
+
+                            spark
+							  .read
+							  .option ("header", "true")
+							  .schema (yellowTaxiSchema)
+							  .csv ("/mnt/datalake/Raw/YelloTaxis_Additional/YellowTaxis_changes.csv")
+					)
+					
+display (yellowTaxiChangesDF) 
+							  
+%python
+
+ii)yellowTaxiChangesDF.createOrReplaceTempView("YellowTaxiChanges") 
+
+SELECT *
+FROM YellowTaxiChanges
+
+
+iii)MERGE INTO TaxisDB.YellowTaxis tgt
+ 
+      USING YellowTaxiChanges  src
+	  
+	  ON tgt.VendorId = src.VendorId
+	     AND  tgt.RideId = src.RideId
+		 
+-- Update row if join conditions match 
+   WHEN MATCHED 
+   
+   
+   THEN 
+       UPDATE SET tgt.PaymentType = src.PaymentType                     -- Use 'UPDATE SET *' to update all columns
+	   
+-- Insert row if row is not present in target table.
+
+   WHEN NOT MATCHED 
+        AND PickupTime >= '2022-03-01'
+		
+		THEN 
+		    INSERT (RideId,VendorId,PickupTime,DropTime,PickupLocationID,DropLocationID,CabNumber,DriverLicenseNumber,PassengerCount,TripDistance,
+	                RateCodeId, PaymentType, TotalAmount, FareAmount, Extra, MtaTax, TipAmount, TollsAmount, ImprovementSurcharge)
+    
+	        VALUES (RideId,VendorId,PickupTime,DropTime,PickupLocationID,DropLocationID,CabNumber,DriverLicenseNumber,PassengerCount,TripDistance,
+	                RateCodeId, PaymentType, TotalAmount, FareAmount, Extra, MtaTax, TipAmount, TollsAmount, ImprovementSurcharge)
+
+   
+	  
+SCHEMA ENFORCEMENT AND EVOLUTION
+-----------------------------------------
+                                           _delta_log
+PartFile1 - 3 cols                          000.json- 3 cols
+
+PartFile2 - 3 cols 
+
+
+#Appending Data with new Schema .
+
+Writer process wants to write two more part files using 2 tasks.
+
+New output files have 4 columns.
+
+PartFile3 - 4 cols
+
+PartFile4 - 4 cols 
+
+# Before entry made into transaction log schema validation is performed. Since schema of new dataset does not match with the Delta table 
+schema no log file gets generated.
+
+If a reader process wants to read the data it will only read Part Files 1 & 2 since 000.json only refers to these two files. 
+So reads consistent data with 3 cols only. 
+
+
+Schema Enforcement - At commit time , schema of new data is checked with Delta table schema .
+
+Schema mismatch could occur if :
+     
+	    - Source contains additional columns.
+		- Column data types don't match .
+		
+Column names are case-insensitive 
+
+     - Columns with same name but different case cannot be added to table.
+	 
+On schema mismatch :
+
+     -   No entry is added to Transaction Log.
+	 -   Exception is raised.
+	 -  Incorrect partition files are still present in the folder .
+	
+	
+Schema Evolution :
+            -   Delta Lake allows adding more columns to table while writing data .  
+            - Needs to be defined explicitly.
+			- MERGE command supports auto schema evolution. 
+			
+A. Write to Parquet & Delta formats 
+
+# Extract records from Data Lake for Ratecodes 
+
+rateCodes1DF = (
+
+                    spark
+					  .read 
+					  .option ("header", "true")
+					  .option ("inferSchema", "true")
+					  .csv ("/mnt/datalake/Raw/Ratecodes/Ratecodes1.csv")
+					  
+			)
+			
+display (rateCodes1DF)
+
+# Write in Parquet format 
+
+(
+
+    rateCodes1DF
+	  .write 
+	  .mode ("overwrite")
+	  
+	  .format ("parquet")
+	  
+	  .save ("/mnt/datalake/Output/RateCodes.parquet")
+)
+
+#write in delta format .
+
+(
+
+    rateCodes1DF
+	  .write 
+	  .mode ("overwrite")
+	  
+	  .format ("delta;")
+	  
+	  .save ("/mnt/datalake/Output/RateCodes.delta")
+)
+
+
+#Extract records from Data Lake for Ratecodes2 
+
+rateCodes2DF = (
+
+                   spark
+				    .read 
+				    .option ("header", "true")
+				    .option ("inferSchema", "true")
+					.csv("/mnt/datalake/Raw/RateCodes/RateCodes2.csv")
+				   
+			)
+display (rateCodes2DF)	
+
+
+# Append in Parquet format 
+
+(
+
+    rateCodes2DF
+	  .write 
+	  .mode ("append")
+	  
+	  .format ("parquet")
+	  
+	  .save ("/mnt/datalake/Output/RateCodes.parquet")
+)
+
+Files with new schema gets appended without error. (no schema enforcement)
+
+# Extract records from Output folder of RateCodes
+
+rateCodesDF = (
+                     spark
+					   .read  
+					   .format ("parquet")
+					   .load ("/mnt/datalake/Output/RateCodes.parquet")
+					   
+			)		   
+			
+display (rateCodesDF)
+
+# Append same data to Delta Format.
+
+(
+
+    rateCodes2DF
+	  .write 
+	  .mode ("append")
+	  
+	  .format ("delta")
+	  
+	  .save ("/mnt/datalake/Output/RateCodes.delta")
+)
+
+A schema mismatch error is detected . This is how Schema Enforcement works.
+
+
+B. Merge changes in Delta Format. This will add new columns to Delta table. 
+
+# Append in delta format.
+
+(
+
+    rateCodes2DF
+	  .write 
+	  .mode ("append")
+	  
+	  .format ("delta")
+	  
+	  .option("mergeSchema", "true")
+	  
+	  .save ("/mnt/datalake/Output/RateCodes.delta")
+)
+				  
+
+
+#Verify . Extract records from Output folder of Ratecodes.
+
+rateCodesDF = (
+                     spark
+					   .read  
+					   .format ("delta")
+					   .load ("/mnt/datalake/Output/RateCodes.delta")
+					   
+			)		   
+			
+display (rateCodesDF)
+
+
+# APPLYING TABLE CONSTRAINTS 
+-----------------------------------
+
+Two types of constraints are supported .
+ - NOT NULL and CHECK 
+ 
+ A. NOT NULL CONSTRAINT 
+ 
+   ALTER TABLE TaxisDB.YellowTaxis 
+         
+		 ALTER COLUMN RideId SET NOT NULL 
+		 
+
+*** Constraint would have failed if RideId had any NULL records.
+
+DESCRIBE HISTORY TaxisDB.YellowTaxis 
+
+VERIFY THROUGH INSERT .
+
+INSERT INTO TaxisDB.YellowTaxis 
+(
+RideId,VendorId,PickupTime,DropTime,PickupLocationID,DropLocationID,CabNumber,DriverLicenseNumber,PassengerCount,TripDistance,
+RateCodeId, PaymentType, TotalAmount, FareAmount, Extra, MtaTax, TipAmount, TollsAmount, ImprovementSurcharge
+)
+
+VALUES 
+( 
+    NULL,
+	
+	3,'2021-12-01T00:00:00:000Z', '2021-12-01T00:15:34:000Z' , 170, 140 , 'TAC399' ,'5131685' , 1, 2.9, 
+	1,1,15.3, 13.0, 0.5 , 0.5 , 1.0, 0.0, 0.3 
+)
+
+B. CHECK constraint
+
+ALTER TABLE TaxisDB.YellowTaxis 
+     ADD CONSTRAINT PassengerCheck CHECK (PassengerCount <= 9)
+	 
+-- multiple conditions: (PassengerCount <= 9 OR PassengerCount IS NULL) 
+
+
+C. DROP CONSTRAINT
+
+ALTER TABLE TaxisDB.YellowTaxis
+   DROP CONSTRAINT PassengerCheck  
+   
+ # Check Log.
+ DESCRIBE HISTORY TaxisDB.YellowTaxis 
+ 
+ 
+ #ACCESSING DATA WITH TIME TRAVEL.
+
+Customers (folder)                              _delta_log (subfolder)
+
+1st Transaction
+
+part-000.parquet
+part-001.parquet                                   000.json (10:00 AM)
+
+2nd Transaction
+
+part-002.parquet                                   001.json (10:10 AM) <--- Reads version 1
+
+
+3rd Transaction 
+
+part-003.parquet                                    002.json (10:20 AM)   <--- Reads current /latest version (1)
+
+
+1) SELECT * 
+       FROM CUSTOMERS 
+
+2) SELECT *
+        FROM Customers VERSION AS OF 1 
+		
+		
+Using TimeTravel we can read a previous version of the data even if it has been updated or deleted.
+
+We can also use TimeStamp to read previous versions of the data .
+
+
+SELECT *
+        FROM Customers TIMESTAMP AS OF '2022-03-01 10:05'  --- Reads log at 10:05 AM
+		
+
+Log retention interval is 30 days by interval .
+
+A. Update a Record.
+
+SELECT RideId , PassengerCount
+FROM TaxisDB.YellowTaxis 
+WHERE RideId = 10000000
+
+
+UPDATE TaxisDB.YellowTaxis 
+SET PassengerCount = 1
+WHERE RideId = 10000000;
+
+
+SELECT RideId , PassengerCount
+FROM TaxisDB.YellowTaxis 
+WHERE RideId = 10000000
+
+
+ # Check Log.
+ DESCRIBE HISTORY TaxisDB.YellowTaxis 
+ 
+	 
+B. Access using Version Number 
+
+SELECT RideId, PassengerCount 
+
+FROM TaxisDB.YellowTaxis        VERSION AS OF 10 
+
+WHERE RideId = 10000000
+
+
+C. Access using TimeStamp
+
+%sql 
+
+SELECT RideId, PassengerCount 
+
+FROM TaxisDB.YellowTaxis        TIMESTAMP AS OF '2022-04-20T22:44:00.000+0000'
+
+WHERE RideId = 10000000
+
+
+D. RESTORE TABLE TO OLDER VERSION.
+
+RESTORE TABLE TaxisDB.YellowTaxis TO VERSION AS OF 10 
+
+# Check Log.
+ DESCRIBE HISTORY TaxisDB.YellowTaxis 
+ 
+#Verify 
+ 
+SELECT RideId , PassengeCount
+FROM TaxisDB.YellowTaxis 
+WHERE RideId = 10000000
+
+----------------------------------------------------------------------------------------------------
+
+BUILDING ETL PIPELINES WITH DELTA LIVE TABLES
+---------------------------------------------
+
+Delta Architecture 
+--------------------
+
+BRONZE LAYER -->  SILVER LAYER ---> GOLD LAYER 
+
+Raw data  --> Cleaned , filtered  --->  Aggregated / 
+              & transformed data        Business specific data 
+
+
+There may be multiple entities holding raw data . Like Customers , Sales ,etc. They may have different data quality issues .
+
+There may be multiple tables in the Silver layer and one bronze table may feed multiple Silver tables. 
+
+There may be multiple tables in the Gold layer based upon business requirements and the data in them might be based on joins in the Silver table.
+
+Complex ETL pipelines challenges :
+    - Infrastructure Management & Scaling
+    -  Handle Batch & Streaming data 
+	- Handle Failures & Retries
+	- Monitor , optimize & Maintain.
+	- Ensure Data Quality
+	- Manage Dependencies .
+	- Track Lineage
+	- Deployment in multiple environments .
+	
+Delta Live Tables is an ETL framework to build reliable , automated , testable & declarative ETL pipelines .
+
+Delta Live Pipelines .
+
+Components of Delta Live Tables .
+
+-  Datasets or Delta Tables.
+-  Data Quality Checks .
+- Queries to define business logic.
+- Pipelines
+- Environments 
+
+Steps to Create ETL Pipelines.
+
+1. Create Live datasets 
+      - Delta tables or views
+	  - Types - Complete , Incremental & Streaming 
+	  
+
+2. Define data quality checks (expectations) on datasets.
+     -   Constraints to apply
+	 -   Actions in case of errors
+	 
+3. Define data transformation queries
+     -  Business logic to clean , filter , transform , aggregate 
+     - Define inter-dependencies between datasets.
+	 
+4. Create , run & test pipelines
+        - Auto-manage infra , process data , maintain lineage , apply quality checks, handle logs , retry on failures , etc.
+		- Mode of execution - Triggered or Continuous 
+
+5. Promote to production
+
+
+Building Simple ETL Pipeline with Delta Live Tables.
+
+"Building ETL Pipeline - DLT YellowTaxis" notebook.
+
+A. Create Live Bronze Table .
+
+CREATE LIVE TABLE YellowTaxis_BronzeLive
+(
+
+     RideId                INT            COMMENT 'This is the primary key column',
+	 VendorId              INT,
+	 PickupTime            TIMESTAMP,
+	 DropTime              TIMESTAMP,
+	 PickupLocationID      INT,
+	 DropLocationID        INT,
+	 CabNumber             STRING,
+	 DriverLicenseNumber   STRING,
+	 PassengerCount        INT,
+	 TripDistance          DOUBLE,
+	 RateCodeId            INT,
+	 PaymentType           INT,
+	 TotalAmount           DOUBLE,
+	 FareAmount            DOUBLE,
+	 Extra                 DOUBLE,
+	 MtaTax                DOUBLE,
+	 TipAmount             DOUBLE,
+	 TollsAmount           DOUBLE,
+	 ImprovementSurcharge  DOUBLE,
+	 
+	 FileName              STRING,
+	 CreatedOn             TIMESTAMP
+)
+
+USING DELTA
+
+LOCATION "/mnt/datalake/Output/YellowTaxis_BronzeLive.delta"
+
+PARTITIONED BY (VendorId)
+
+COMMENT "Live Bronze table for YellowTaxis"
+
+AS
+
+SELECT *
+
+     , INPUT_FILE_NAME()  AS FileName
+	 , CURRENT_TIMESTAMP() AS CreatedOn
+	 
+FROM parquet.`/mnt/datalake/Raw/YellowTaxisParquet`
+
+***Note :- For a Live table it is manadatory to define the SELECT statement . That means how the data will be populated into this table.
+Since Bronze tables  keep raw data we are not adding any transformations.
+On executing the above CREATE statement only the syntax is checked but since it's a DLT this command can only be executed by a Pipeline.
+
+B. Create Live Silver Table.
+
+CREATE LIVE TABLE YellowTaxis_SilverLive
+(
+     RideId                INT            COMMENT 'This is the primary key column',
+	 VendorId              INT,
+	 PickupTime            TIMESTAMP,
+	 DropTime              TIMESTAMP,
+	 PickupLocationId      INT,
+	 DropLocationId        INT,
+	 TripDistance          DOUBLE,
+	 TotalAmount           DOUBLE,
+	 
+	 PickupYear            INT            GENERATED ALWAYS AS (YEAR (PickupTime)),
+	 PickupMonth	       INT            GENERATED ALWAYS AS (MONTH (PickupTime)),
+	 PickupDay             INT            GENERATED ALWAYS AS (DAY (PickupTime)),
+	 
+	 
+	 CreatedOn             TIMESTAMP,
+
+     -- Define the constraints 
+     CONSTRAINT Valid_TotalAmount     EXPECT (TotalAmount IS NOT NULL AND TotalAmount > 0) ON VIOLATION DROP ROW,
+
+     CONSTRAINT Valid_TripDistance    EXPECT (TripDistance > 0)                            ON VIOLATION DROP ROW,
+
+	 CONSTRAINT Valid_RideId          EXPECT (RideId IS NOT NULL AND RideId > 0)           ON VIOLATION FAIL UPDATE 
+	 
+) 
+
+USING DELTA
+
+LOCATION "/mnt/datalake/Output/YellowTaxis_SilverLive.delta"
+
+PARTITIONED BY (PickupLocationID)
+
+AS 
+
+SELECT RideId
+       ,VendorId
+	   ,PickupTime
+	   ,DropTime
+	   ,PickupLocationID
+	   ,DropLocationID
+	   ,TripDistance
+	   ,TotalAmount
+	   
+	   ,CURRENT_TIMESTAMP() AS CreatedOn
+	   
+FROM live.YellowTaxis_BronzeLive
+
+*** Note:- To access a Live table we will have to use the 'live' keyword.
+
+C. Create Live Gold Table - 1
+
+CREATE LIVE TABLE YellowTaxis_SummaryByLocation_GoldLive
+
+LOCATION "/mnt/datalake/Output/YellowTaxis_SummaryByLocation_GoldLive.delta"
+
+AS 
+
+SELECT PickupLocationId , DropLocationId 
+
+       ,COUNT(RideId)        AS TotalRides
+	   ,SUM (TripDistance)   AS TotalDistance
+	   ,SUM (TotalAmount)   AS  TotalAmount
+
+
+FROM live.YellowTaxis_SilverLive
+
+GROUP BY PickupLocationId , DropLocationId
+
+
+D. 	Create Live Gold Table - 2
+
+CREATE LIVE TABLE YellowTaxis_SummaryByDate_GoldLive
+
+LOCATION "/mnt/datalake/Output/YellowTaxis_SummaryByDate_GoldLive.delta"
+
+AS
+
+SELECT PickupYear , PickupMonth , PickupDay
+
+       ,COUNT (RideId) AS TotalRides
+	   ,SUM (TripDistance)   AS TotalDistance
+	   ,SUM (TotalAmount)   AS  TotalAmount
+	   
+FROM live.YellowTaxis_SilverLive
+
+GROUP BY PickupYear , PickupMonth , PickupDay
+
+From the left menu go to the 'Jobs' --> 'Delta Live Tables' --> 'Create Pipeline' 
+
+There are three Product Editions -
+a) Core 
+
+b) Pro
+
+
+c)Advanced 
+
+
+- CDC is only available in Pro and Advanced . 
+- Declarative Python and SQL APIs available in all three.
+- Append-only Flows available in all three.
+- DLT Autoscaling available in all three.
+- Data Quality Management is only available in Advanced.
+- Photon is available optionally in all the three editions.
+- All of them maintain log information for upto certain days.
+
+Select the 'Advanced' edition.
+      -Add a name for the pipeline.
+      - In Notebook libraries click on 'select' and select the notebook "DLT YellowTaxis" . 
+	  - Define Target 'TaxisDB'.All the DLT will be created here.
+	  - We can also define the storage location of the data lakes to keep the files.(/mnt/datalake/Output)
+	  - In Pipeline 'Mode' .- 'Triggered' mode means Cluster will start , execute the Pipeline and Shutdown.
+	                        - In 'Continuos' mode it will keep executing the pipelines . It's useful in Streaming Pipelines.
+	  - Define Autoscale options.
+	  - Cluster. No. of workers.
+	  - Enable Photon engine (optional).
+	  -Click 'Create'. 
+	  
+DLT Execution modes. 
+
+a) Development - Reuses the same cluster for multiple runs to avoid overhead.
+               - In case of errors does not retry to run pipeline.
+
+b) Production - Creates a new cluster for each run and shuts down after execution.
+              - In case of specific errors , retry the execution of pipeline.
+			  
+
+
+#Query Live tables.
+
+a)DESCRIBE HISTORY TaxisDB.YellowTaxis_BronzeLive
+
+b) DELETE FROM TaxisDB.YellowTaxis_BronzeLive 
+   WHERE RideId = 5530102
+   
+c) SELECT *
+   FROM  TaxisDB.YellowTaxis_BronzeLive
+   LIMIT 10 
+   
+   
+## BUILDING COMPLEX & INCREMENTAL ETL PIPELINE 
+-----------------------------------------------
+
+There are two Table types - Complete & Incremental .
+
+
+Delta Architecture with DLT.
+-----------------------------------
+'TaxisZones' is a small table so it will be loaded completely every time in the Bronze layer.(Complete Table)
+             - A view will be created on this in the Silver layer . (Complete View)
+			 
+'YellowTaxis' will be loaded incrementally in the Bronze layer. (Incremental Table)
+              - This means only the new files from source will be loaded to Bronze table.
+			  - We can also implement complex logic by creating a Incremental View on the Incremental(Bronze) Table.
+			  - From the Bronze view Silver Table for the 'Yellow Taxis' will be loaded. This will also be a incremental Table since only new data 
+			     from Bronze will be loaded into this Table.
+				 
+'Summary By Date' - Complete Table in Gold layer (Aggregated data from 'Yellow Taxis'). This will reload every time so this will be a Complete Table.
+
+
+'Summary By Zone' - Complete Table in Gold layer (based upon joins from 'YellowTaxis' [Incr. Table in Silver] and 'TaxiZones' [complete View in Silver]).
+
+
+
+Bronze Layer                                               Silver Layer                                   Gold Layer
+
+TaxiZones (Complete Table)  ---->                        TaxiZones (Complete View)    ---|---->           SummaryByZone
+                                                                                         |               (Complete Table)
+                                                                       |---------------->| 
+YellowTaxis        -->  YellowTaxis     ------>             YellowTaxis|--------->                        SummaryByDate
+(Incremental Table)   (Incremental View)                   (Incremental Table)                          (Complete Table) 
+
+
+Supported Scenarios
+--------------------------
+Read From                     Write To                    What Happpens ?                Scenario          
+
+Complete                      Complete                   Data is overwritten             Taxi Zones 			  
+                                                                                        Bronze -> Silver
+
+Complete                      Incremental               Not possible                    N/A
+
+
+Incremental                   Complete                   Data is overwritten             YellowTaxis
+                                                                                       Silver -> Gold 
+
+
+Incremental                   Incremental              Movement of new records    		  YellowTaxis																		   
+                                                                                         Bronze -> Silver 
+
+
+
+# Building Incremental ETL Pipeline - DLT TaxiZones
+
+A.
+
+CREATE LIVE TABLE TaxiZones_BronzeLive
+
+LOCATION  "/mnt/datalake/Output/TaxiZones_BronzeLive.delta"
+
+COMMENT "Live Bronze table for Taxi Zones"
+
+AS
+
+SELECT *
+FROM parquet.`/mnt/datalake/Raw/TaxiZones.parquet`
+
+
+B. Create Live Bronze View 
+
+CREATE LIVE VIEW TaxiZones_SilverLive 
+(
+     CONSTRAINT Valid_LocationId    EXPECT  (LocationId IS NOT NULL AND LocationId > 0)  ON VIOLATION DROP ROW 
+
+)
+
+COMMENT "Live Bronze View for Taxi Zones"
+
+AS
+
+SELECT *
+FROM live.TaxiZones_BronzeLive
+
+
+A.1 Create Incremental Live Bronze Table
+
+# Data will be incrementally loaded from Data lake using Auto Loader.
+
+
+CREATE INCREMENTAL LIVE TABLE YellowTaxis_BronzeLiveIncremental
+(
+     RideId                INT            COMMENT 'This is the primary key column',
+	 VendorId              INT,
+	 PickupTime            TIMESTAMP,
+	 DropTime              TIMESTAMP,
+	 PickupLocationID      INT,
+	 DropLocationID        INT,
+	 CabNumber             STRING,
+	 DriverLicenseNumber   STRING,
+	 PassengerCount        INT,
+	 TripDistance          DOUBLE,
+	 RateCodeId            INT,
+	 PaymentType           INT,
+	 TotalAmount           DOUBLE,
+	 FareAmount            DOUBLE,
+	 Extra                 DOUBLE,
+	 MtaTax                DOUBLE,
+	 TipAmount             DOUBLE,
+	 TollsAmount           DOUBLE,
+	 ImprovementSurcharge  DOUBLE,
+	 
+	 FileName              STRING,
+	 CreatedOn             TIMESTAMP
+
+)
+
+USING DELTA 
+
+
+LOCATION "/mnt/datalake/Output/YellowTaxis_BronzeLiveIncremental.delta"
+
+
+PARTITIONED BY (VendorId)
+
+
+COMMENT "Live Bronze table for YellowTaxis"
+
+AS
+
+SELECT RideId::Int
+	   ,VendorId::Int
+	   ,PickupTime::Timestamp
+	   ,DropTime::Timestamp
+	   ,PickupLocationId::Int
+	   ,DropLocationId::Int
+	   ,CabNumber::String
+	   ,DriverLicenseNumber::String
+	   ,PassengerCount::Int
+	   ,TripDistance::Double
+	   ,RateCodeId::Int
+	   ,PaymentType::Int
+	   ,TotalAmount::Double
+	   ,FareAmount::Double
+	   ,Extra::Double
+	   ,MtaTax::Double
+	   ,TipAmount::Double
+	   ,TollsAmount::Double,
+	   ,ImprovementSurcharge::Double
+	 
+	  ,INPUT_FILE_NAME() AS  FileName
+	  , CURRENT_TIMESTAMP() AS CreatedOn
+	  
+	  
+FROM cloud_files(  "/mnt/datalake/Raw/YellowTaxis/",
+                        "csv",
+						
+						map("inferSchema", "true")
+						
+				)		
+
+
+
+Cloud_files is an autoloader tool in Databricks that loads files continuosly from cloud storage(incrementally) as they arrive.
+It picks up files incrementally from storage that will help to load data incrementally into the table.
+
+# Create Incremental Live Bronze View. 
+
+# This is to apply data quality checks and fetch incremental data from Bronze Table.
+
+CREATE INCREMENTAL LIVE VIEW YellowTaxis_BronzeLiveIncrementalView
+(
+    CONSTRAINT Valid_TotalAmount    EXPECT (TotalAmount IS NOT NULL AND TotalAmount > 0) ON VIOLATION DROP ROW,
+	CONSTRAINT Valid_TripDistance   EXPECT (TripDistance > 0)                           ON VIOLATION DROP ROW,
+	CONSTRAINT Valid_RideId         EXPECT(RideId IS NOT NULL AND RideId > 0)           ON VIOLATION FAIL UPDATE 
+	
+)
+
+AS
+
+SELECT RideId              
+	  ,VendorId            
+	  ,PickupTime         
+	 , DropTime          
+	 ,PickupLocationID      
+	 ,DropLocationID        
+	 ,TripDistance
+	 ,TotalAmount
+     ,CreatedOn
+
+     ,YEAR (PickupTime) AS PickupYear
+	 ,MONTH (PickupTime) AS PickupMonth
+	 ,DAYOFMONTH(PickupTime) AS PickupDay
+	 
+FROM STREAM (live.YellowTaxis_BronzeLiveIncremental)
+
+** This View will only receive new records from Bronze Table .
+** To pickup data from Bronze Table incrementally we have to use the STREAM function and pass it the Table name.
+
+
+
+B. Create Live Silver Layer
+
+B.1 Create Incremental Live Silver Table 
+
+CREATE INCREMENTAL LIVE TABLE YellowTaxis_SilverLiveIncremental
+(
+
+      RideId               INT          COMMENT 'This is the primary key column',
+	  VendorId             INT,
+	  PickupTime           TIMESTAMP,
+	  DropTime             TIMESTAMP,
+	  PickupLocationID     INT,
+	  DropLocationID       INT,
+      TripDistance         DOUBLE,
+	  TotalAmount          DOUBLE,
+	  CreatedOn            TIMESTAMP,
+	  PickupYear           INT,
+	  PickupMonth          INT,
+	  PickupDay            INT
+	  
+)
+
+USING DELTA 
+LOCATION "/mnt/datalake/Output/YellowTaxis_SilverLiveIncremental.delta"
+
+PARTITIONED BY (PickupLocationID)
+
+** Note- If you are building an incremental table there are two options .
+ a)If you want to only append the new data define SELECT statement.
+ b)If you want to merge data do not define SELECT statement.
+
+B.2 Merge Change Incrementally into Silver table.
+
+APPLY CHANGES INTO live.YellowTaxis_SilverLiveIncremental
+
+FROM STREAM (live.YellowTaxis_BronzeLiveIncrementalView)
+
+KEYS (RideId , VendorId)
+
+SEQUENCE BY CreatedOn
+
+** Note :- In DLT there is no MERGE statement so we have to use the 'APPLY CHANGES' command .
+          -  Apply changes into the Silver Live Table by picking data from Bronze View . Since we are going to pick data incrementally from Bronze it 
+             must be called using STREAM function. 
+          -Define the keys to join . Let's join by using 'RideId' and 'VendorId'. The same keys must be present in both the datasets.
+		  -SEQUENCE BY sorts the data in Bronze Table so that the changes are applied in sequence.
+
+
+C. Create Live Gold Layer
+
+C.1 Create Complete Gold Table.
+
+CREATE LIVE TABLE YellowTaxis_SummaryByDate_GoldLive2
+
+LOCATION "/mnt/datalake/Output/YellowTaxis_SummaryByDate_GoldLive2.delta"
+
+AS
+
+SELECT PickupYear , PickupMonth , PickupDay 
+     
+	 ,COUNT(RideId)        AS TotalRides 
+	 ,SUM(TripDistance)    AS TotalDistance
+	 ,SUM (TotalAmount)    AS  TotalAmount
+	 
+FROM live.YellowTaxis_SilverLiveIncremental
+
+GROUP BY PickupYear , PickupMonth , PickupDay
+
+** Note - Since we want to pickup all data from Silver , do not use the STREAM keyword.
+
+
+C.2 Create Complete Gold Table. Join YellowTaxis and TaxisZones datasets.
+
+CREATE LIVE TABLE YellowTaxis_SummaryByZone_GoldLive
+
+LOCATION "/mnt/datalake/Output/YellowTaxis_SummaryByZone_GoldLive.delta"
+
+AS
+
+SELECT Zone , Borough
+     
+	 ,COUNT(RideId)        AS TotalRides 
+	 ,SUM(TripDistance)    AS TotalDistance
+	 ,SUM (TotalAmount)    AS  TotalAmount
+	 
+FROM live.YellowTaxis_SilverLiveIncremental yt
+
+   JOIN live.TaxiZones_SilverLive tz                ON yt.PickupLocationId = tz.LocationId
+
+GROUP BY Zone , Borough
+
+
+# Now create a Pipeline . [Advanced Edition]
+
+a)Go to 'Jobs' tab and select 'Delta Live Tables' .
+b) Cick on 'Create Pipeline' .(Add name for the Pipeline)
+c) Since we have two notebooks to run , select both of them - 'TaxiZones' and 'YellowTaxisIncremental'
+d) Define the Target database - 'TaxisDB' and Mountpath (/mnt/datalake/Output) as the storage location.
+e) Pipeline mode - Triggered.
+f) Disable 'Autoscaling'.
+g) Workers - 1
+h) Click CREATE.
+
+Go to Azure DataLake from portal and load one more file YellowTaxis2.csv(containing only 4 records)
+
+Trigger the pipline again. Will show only 4 records.
+
+
+************************************ XX **********************************************************************************************
+
+
+
+
+
