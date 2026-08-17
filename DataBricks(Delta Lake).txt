@@ -2061,6 +2061,16 @@ FROM cloud_files(  "/mnt/datalake/Raw/YellowTaxis/",
 						
 				)		
 
+# Using PySpark.
+df = (spark
+        .readStream   # a streaming dataframe
+        .format("cloudFiles")  # tells Spark to use AutoLoader
+        .option("cloudFiles.format", "json")  # the actual format of out data files. Tells AutoLoader to expect json files
+        .option("cloudFiles.useNotifications",True) # Should AutoLoader use a notification queue
+        .schema(some_custom_schema)  # custom schema of the actual data file
+        .load(f"{actual_data_location}/directory") # location of the actual data file
+    )
+Auto Loader file detection…
 
 
 Cloud_files is an autoloader tool in Databricks that loads files continuosly from cloud storage(incrementally) as they arrive.
