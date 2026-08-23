@@ -1987,7 +1987,8 @@ FROM live.TaxiZones_BronzeLive
 
 A.1 Create Incremental Live Bronze Table
 
-# Data will be incrementally loaded from Data lake using Auto Loader.
+# Data will be incrementally loaded from Data lake using Auto Loader. Note: CREATE INCREMENTAL LIVE TABLE has officially been deprecated and replaced by 
+CREATE STREAMING LIVE TABLE.
 
 
 CREATE INCREMENTAL LIVE TABLE YellowTaxis_BronzeLiveIncremental
