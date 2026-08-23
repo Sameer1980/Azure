@@ -2159,6 +2159,15 @@ SEQUENCE BY CreatedOn
           -Define the keys to join . Let's join by using 'RideId' and 'VendorId'. The same keys must be present in both the datasets.
 		  -SEQUENCE BY sorts the data in Bronze Table so that the changes are applied in sequence.
 
+/* Specify STORED AS SCD TYPE 1 (overwrite) or STORED AS SCD TYPE 2 (history).*/
+CREATE OR REFRESH STREAMING TABLE live.YellowTaxis_SilverLiveIncremental;
+
+APPLY CHANGES INTO live.YellowTaxis_SilverLiveIncremental
+FROM STREAM(live.YellowTaxis_BronzeLiveIncrementalView)
+KEYS (RideId, VendorId)
+SEQUENCE BY CreatedOn
+STORED AS SCD TYPE 1;
+
 
 C. Create Live Gold Layer
 
