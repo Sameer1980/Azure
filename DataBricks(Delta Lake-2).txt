@@ -470,7 +470,7 @@ On Delta table: 6.74 sec.
 Z-Ordering is even more effective than higher volumes of data. 
 
 
-Cleaning Files with Vacuum 
+Cleaning Files with Vacuum :
 ---------------------------
 Insert (add 4 records)
 
@@ -501,24 +501,22 @@ Part 1 File can be used for time travel .
 
 But suppose we don't want to use this file and want to clean up. 
 This is where Vacuum command is used.
-
+VACUUM permanently deletes unreferenced Parquet files that are older than your retention threshold. The transaction log might still know about those versions, but the data they depend on is gone.
 Vacuum command physically removes data files.
            -  Files that are no longer referenced in the latest transaction log state .
            -   And files that are older than a retention threshold.(default is 7 days)
 		   
 	Affects time travel.
 	Tip: Set the retention period for time travel and run Vacuum periodically !! 
+
 ALTER TABLE  my_catalog.new_schema.vehicles SET TBLPROPERTIES (
   'delta.logRetentionDuration' = '30 days',
   'delta.deletedFileRetentionDuration' = '7 days'
 );
 	
-Cleaning Files with Vacuum
-
+Cleaning Files with Vacuum:
 DESCRIBE HISTORY TaxisDB.YellowTaxis;
-
 Switch over to Azure Data lake folder to check the files in data lake.
-
 
 VACUUM TaxisDB.YellowTaxis
 RETAIN 0 HOURS DRY RUN;
