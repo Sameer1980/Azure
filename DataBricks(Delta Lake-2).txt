@@ -508,18 +508,31 @@ Vacuum command physically removes data files.
 		   
 	Affects time travel.
 	Tip: Set the retention period for time travel and run Vacuum periodically !! 
+ALTER TABLE  my_catalog.new_schema.vehicles SET TBLPROPERTIES (
+  'delta.logRetentionDuration' = '30 days',
+  'delta.deletedFileRetentionDuration' = '7 days'
+);
 	
 Cleaning Files with Vacuum
 
-DESCRIBE HISTORY TaxisDB.YellowTaxis
+DESCRIBE HISTORY TaxisDB.YellowTaxis;
 
 Switch over to Azure Data lake folder to check the files in data lake.
 
 
 VACUUM TaxisDB.YellowTaxis
+RETAIN 0 HOURS DRY RUN;
 
-RETAIN 0 HOURS DRY RUN
- 
+Delta Lake maintains two separate retention settings, and mixing them up is one of the most common reasons time travel fails unexpectedly.
+Transaction Log Retention (logRetentionDuration)
+Default: 30 days
+Keeps the metadata that describes each table version
+Enables commands like DESCRIBE HISTORY to show past versions
+
+Data File Retention (deletedFileRetentionDuration)
+Default: 7 days (168 hours)
+Keeps the actual Parquet files that older versions depend on
+Files are permanently removed by the VACUUM command.
 
 Specifiying 0 hrs. will delete all previous versions. Use DRY RUN clause .
 It will not actually delete the files but return a list of files to be deleted.
