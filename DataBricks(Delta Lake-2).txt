@@ -19,9 +19,7 @@ Serverless SQL Pool.
   - Directly query Delta format.
   - Only pay for the amount of data consumed by Queries.
   
-
 A.Create a Spark Pool.
-
 Open Azure Synapse Studio -> 'Manage' -> 'Apache Spark Pools' --> Create a new one.
 (provide the Spark Pool name , node size , disable AutoScale, No. of nodes as 3.
 Go to 'Additional Settings' .
@@ -263,9 +261,7 @@ SELECT COUNT(*)
 
 FROM TaxisDB.YellowTaxisParquet
 
-
 --From Delta
-
 
 SELECT COUNT(*)
 
@@ -315,12 +311,8 @@ Data is compressed and stored in new evenly-balanced , larger files of optimal s
 - Previous files are still there to support time travel.
 
 Run Optimize periodically depending on number of operations on your table !
-
-
 Scenario 2:
-
 Suppose there are three files -
-
 File1:
 
 Id | City
@@ -342,19 +334,14 @@ Id | City
 7  | Seattle
 8  | Delhi
 
-
 The record for Delhi is present in all three files.This means all three files should be opened to get the data .
 
 SELECT *
-
 FROM Customer
-
-WHERE City = 'Delhi'
+WHERE City = 'Delhi';
 
 These scenarios can be optimized by using Z-Order Optimization.
-
 Use OPTIMIZE ZORDER BY (City). It will create new files but data will be sorted by City column and then stored in the files.
-
 File 4:
 Id | City
 3  | Delhi
@@ -373,7 +360,7 @@ SELECT *
 
 FROM Customer
 
-WHERE City = 'Delhi'
+WHERE City = 'Delhi';
 
 
 Data will be picked up from one file only (File4) while the other file(File5) will be ignored bacause of Data Skipping.
@@ -392,83 +379,54 @@ A. Check performance before optimization-
 
 SELECT PickupLocationId
 , COUNT (*) AS TotalRides
-
 FROM TaxisDB.YellowTaxisParquet
-
 WHERE TripYear = 2022
   AND TripMonth = 3
   AND TripDay = 15
-  
-
-GROUP BY PickupLocationId
- 
-ORDER BY TotalRides DESC 
-
+  GROUP BY PickupLocationId
+ ORDER BY TotalRides DESC ;
 
 -Run the same query on the Delta table. It will take significantly lesser time . On Parquet table 1.12 min. and on Delta table 9.42 sec.
 This is because of Data Skipping.
 
 SELECT PickupLocationId
 , COUNT (*) AS TotalRides
-
 FROM TaxisDB.YellowTaxis
-
 WHERE TripYear = 2022
   AND TripMonth = 3
-  AND TripDay = 15
-  
-
-GROUP BY PickupLocationId
- 
-ORDER BY TotalRides DESC 
-
-
+  AND TripDay = 15;
+  GROUP BY PickupLocationId
+ ORDER BY TotalRides DESC ;
 
 B. Optimize : Bin-packing
-
 OPTIMIZE TaxisDB.YellowTaxis 
- 
 WHERE PickupLocationId = 100               --optional 
 
 -- One Partition gets optimized , 10 files gets removed(retained only for time travel)  , 1 file gets added .This one single now contains all the records.
-
 C. Optimize - Z-Ordering
-
 OPTIMIZE TaxisDB.YellowTaxis
-
 ZORDER BY TripYear , TripMonth , TripDay    --optional 
 
-
 -- More than 256 partitions have been optimized , 2512 files removed  and 255 new files added.
-
  
 A. Check performance after optimization-
 
 SELECT PickupLocationId
 , COUNT (*) AS TotalRides
-
 FROM TaxisDB.YellowTaxisParquet
-
 WHERE TripYear = 2022
   AND TripMonth = 3
   AND TripDay = 15
-  
-
-GROUP BY PickupLocationId
- 
-ORDER BY TotalRides DESC  
+  GROUP BY PickupLocationId
+ ORDER BY TotalRides DESC ;
 
 Performance much better than previous queries .
-
 On Parquet table : 1.12 min.
-
 On Delta table: 9.42 sec.
-
 On Delta table: 6.74 sec. 
 (optimized)
 
 Z-Ordering is even more effective than higher volumes of data. 
-
 
 Cleaning Files with Vacuum :
 ---------------------------
@@ -487,8 +445,6 @@ Id | Name                                                       Operation  |   F
 4  |  D                                                          Add        |   Part2
 
 
-
-
 Delete (where Id=1)                                             _delta_log (subfolder)                     
                                                                  001.json
 Part3 File:                                                       Operation   |   File Name      
@@ -496,9 +452,7 @@ Id |  Name                                                        Remove      | 
 2  |   B                                                           Add        |   Part2
 
 
-
 Part 1 File can be used for time travel .
-
 But suppose we don't want to use this file and want to clean up. 
 This is where Vacuum command is used.
 VACUUM permanently deletes unreferenced Parquet files that are older than your retention threshold. The transaction log might still know about those versions, but the data they depend on is gone.
@@ -536,49 +490,35 @@ Specifiying 0 hrs. will delete all previous versions. Use DRY RUN clause .
 It will not actually delete the files but return a list of files to be deleted.
 
 If we don't retention hrs. by default it is 7 hrs.
-
 Databricks will give us a warning about deleting files with such a low retention period.So it is important to set the right retention period.
-
 But if we still want to delete all previous versions.
-
 SET spark.databricks.delta.retentionDurationCheck.enabled = false
 
 Again run. 
 
 VACUUM TaxisDB.YellowTaxis
-
-RETAIN 0 HOURS DRY RUN
+RETAIN 0 HOURS DRY RUN;
 
 It will return a list of files to be deleted by Vacuum as they are not referenced by the latest version of the table.
-
 Run Vacuum again to physically delete the files.
 
 VACUUM TaxisDB.YellowTaxis
-
-RETAIN 0 HOURS 
-
+RETAIN 0 HOURS ;
 
 Verify from the Azure portal to check whether files have been physically deleted or not.
-
 Again check Transaction Log.
-
-DESCRIBE HISTORY TaxisDB.YellowTaxis
+DESCRIBE HISTORY TaxisDB.YellowTaxis;
 
 
 Files for Time travel are not longer available.
 
 SELECT * 
-FROM TaxisDB.YellowTaxis VERSION AS OF 0 
-
-
+FROM TaxisDB.YellowTaxis VERSION AS OF 0 ;
 
 Enabling Auto Optimization on Delta tables.
 ------------------------------------------------
-
 Auto Optimize features:- 
-
 Optimized Writes                                        Auto Compaction                                       
-
 (Auto bin-packing while writing)                     (Auto bin-packing after writing)
 
 Suppose we have a Job(process sales data) . Spark will create optimal tasks that will write optimal size part files to the data lake.
@@ -592,7 +532,6 @@ Optimized Writes -
       -  Helpful when loading streaming data.
 	  -  When performing DML operations on table.
 	  
-
 Auto Compaction -
     -  Immediately after writing , Databricks further checks partition files in Delta folder.
 	- Any non-compacted files are compacted to - 128 MB.
@@ -605,8 +544,6 @@ Use cases -
 	  
 	  
 A. Create & load Delta Table (non-optimized)
-
-
 CREATE TABLE TaxisDB.YellowTaxis_NonOptimized
 (
 RideId                 INT         COMMENT 'This is the primary key column',
@@ -633,7 +570,7 @@ ImprovementSurcharge   DOUBLE
 
 USING DELTA
 LOCATION "/mnt/datalake/Output/YellowTaxis_NonOptimized.delta"
-PARTITIONED BY (PickupLocationId)  
+PARTITIONED BY (PickupLocationId)  ;
 
 
 
@@ -719,12 +656,9 @@ TollsAmount            DOUBLE,
 ImprovementSurcharge   DOUBLE
 
 )
-
 USING DELTA
 LOCATION "/mnt/datalake/Output/YellowTaxis_Optimized.delta"
 PARTITIONED BY (PickupLocationId)  
-
-
 TBLPROPERTIES (delta.autoOptimize.optimizeWrite = true , delta.autoOptimize.autoCompact = true )
 
 
