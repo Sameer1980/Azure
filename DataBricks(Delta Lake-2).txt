@@ -41,20 +41,15 @@ D. Click on 'Run cell'.
    SQL Queries.
        - 
 	   %%sql 
-	   
 	   CREATE DATABASE IF NOT EXISTS TaxisDB
 	   
 	%%sql
-	
 	CREATE TABLE TaxisDB.YellowTaxis
-	
 	USING DELTA
-	
-	LOCATION "abfss://taxidata@pltaxidatalake.dfs.core.windows.net/Output/YellowTaxis.delta"
+		LOCATION "abfss://taxidata@pltaxidatalake.dfs.core.windows.net/Output/YellowTaxis.delta"
 	
 	
 	%%sql
-	
 	SELECT *
 	FROM TaxisDB.YellowTaxis
 	LIMIT 100 
@@ -78,7 +73,6 @@ How Your Code Runs:
 3.The cluster's DBR environment interprets the language.
 4.The Spark Engine converts your code into distributed tasks.
 5.The cluster's physical hardware executes those tasks.
-
 
 Optimizing with Delta Engine in Databricks.
 ----------------------------------------------
@@ -139,27 +133,21 @@ EmpId  | Salary                                       Column | Minimum | Maximum
 All these stats are stored in the Transaction log.
 
 SELECT * 
-
 FROM Employees
-
-WHERE Salary BETWEEN 16000 AND 17000 
+WHERE Salary BETWEEN 16000 AND 17000;
 
 Files 1 & 2 will be rejected based on computed stats.
 File 3 will be selected .
 
 There is only record with salary 16500 and that will be selected .
-
 Data skipping :
      -   First checks the statistics in the log.
 	 -   Reads only files which fall within range of filter conditions.
 	 -  Rest of the files are skipped.
-	 
 This can significantly improve query perfomance . 
 
 A. Re-create Parquet and Delta tables -
-
 %python
-
 dbutils.fs.rm("/mnt/datalake/Output/YellowTaxis.parquet", True)
 dbutils.fs.rm("/mnt/datalake/Output/YellowTaxis.delta", True)
 
@@ -167,12 +155,9 @@ DROP TABLE IF EXISTS TaxisDB.YellowTaxisParquet;
 DROP TABLE IF EXISTS TaxisDB.YellowTaxis;
 
 %python
-
 # Create schema for Green Taxi Data 
-
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
-
 yellowTaxiSchema = (
                       StructType()
 					     .add("RideId", "integer")
@@ -236,11 +221,8 @@ yellowTaxisDF = (
      yellowTaxisDF
 	    .write 
 		.mode ("overwrite")
-		
 		.partitionBy("PickupLocationId")
-		
 		.format("delta")
-		
 		.option("path", "/mnt/datalake/Output/YellowTaxis.delta")
 		.saveAsTable("TaxisDB.YellowTaxis")
 )
@@ -248,7 +230,7 @@ yellowTaxisDF = (
 
 #Check table history
 
-DESCRIBE HISTORY TaxisDB.YellowTaxis
+DESCRIBE HISTORY TaxisDB.YellowTaxis;
 
 B. Counting of records 
 
@@ -256,19 +238,15 @@ B. Counting of records
 - Delta tables get the count from transaction log.
 
 -- From Parquet
-
 SELECT COUNT(*)
-
-FROM TaxisDB.YellowTaxisParquet
+FROM TaxisDB.YellowTaxisParquet;
 
 --From Delta
 
 SELECT COUNT(*)
-
-FROM TaxisDB.YellowTaxis
+FROM TaxisDB.YellowTaxis;
 
 -- Delta table query takes less times (0.96 sec.) to execute than Parquet table query (50.5 sec.)
-
 With growing volume of data , Parquet tables will take more time to query than Delta tables.
 
 C. Data Skipping
@@ -575,12 +553,9 @@ PARTITIONED BY (PickupLocationId)  ;
 
 
 %python
-
 # Create schema for Green Taxi Data 
-
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
-
 yellowTaxiSchema = (
                       StructType()
 					     .add("RideId", "integer")
@@ -604,7 +579,6 @@ yellowTaxiSchema = (
 						 .add("ImprovementSurcharge", "double")
 						 
 				)
-
   
 yellowTaxisDF = (
                       spark
@@ -615,12 +589,8 @@ yellowTaxisDF = (
 					   
                )
  Run the above code .
- 
- 
  Now let's run data from the DataFrame to this table.
- 
  %python
- 
  (
  
       yellowTaxisDF
@@ -659,11 +629,9 @@ ImprovementSurcharge   DOUBLE
 USING DELTA
 LOCATION "/mnt/datalake/Output/YellowTaxis_Optimized.delta"
 PARTITIONED BY (PickupLocationId)  
-TBLPROPERTIES (delta.autoOptimize.optimizeWrite = true , delta.autoOptimize.autoCompact = true )
-
+TBLPROPERTIES (delta.autoOptimize.optimizeWrite = true , delta.autoOptimize.autoCompact = true );
 
 Now add data to this Table from the same dataframe.
-
  %python
  
  (
@@ -675,8 +643,40 @@ Now add data to this Table from the same dataframe.
 			 .format("delta")
 			 .save ("/mnt/datalake/Output/YellowTaxis_NonOptimized.delta")
 )
-
 Switch over to Data Lake.
+
+/* Using the TVF read_files to read data from UC volumes. */
+CREATE OR REPLACE TABLE my_catalog.taxisdb.yellowtaxis__optimize
+USING DELTA
+TBLPROPERTIES (delta.autoOptimize.optimizeWrite = True , delta.autoOptimize.autoCompact = True )
+AS
+SELECT 
+  vendor_id,
+  pickup_datetime,
+  dropoff_datetime,
+  passenger_count,
+  trip_distance,
+  rate_code,
+  store_and_fwd_flag,
+  pickup_longitude,
+  pickup_latitude,
+  dropoff_longitude,
+  dropoff_latitude,
+  payment_type,
+  fare_amount,
+  extra,
+  mta_tax,
+  tip_amount,
+  tolls_amount,
+  total_amount,
+  _metadata
+FROM read_files(
+  '/Volumes/my_catalog/taxisdb/yellowtaxis/yellowtaxis.csv',
+  format => 'csv',
+  header => true
+)
+WHERE _rescued_data IS NULL;
+
 
 Working with Photon Execution Engine.
 ---------------------------------------
