@@ -69,7 +69,19 @@ Go to Data Explorer --> Right click on the 'parquet' file --> select 'New SQL sc
 	 - Change the format to Delta.
 	 - click on Run to run the SQL query.
 	 
-	 
+In Databricks, compute clusters (which run the Databricks Runtime / DBR) execute your Python, Scala, or SQL code by using the Apache Spark engine under the hood.Because these three concepts work together rather than being mutually exclusive, here is exactly how they interact to run your code:⚙️ The Core Roles
+Compute Clusters (The Hardware): This is the actual collection of cloud virtual machines (drivers and workers) that provide the CPU, memory, and networking power to do the work.
+Databricks Runtime / DBR (The Operating Software): This is the software stack installed on those machines. It includes the operating system, optimized libraries, Python/Scala environments, and the specific version of Spark.
+Spark Engine (The Execution Brain): This is the core engine bundled inside the DBR. It takes your SQL, Python, or Scala code, translates it into an optimized execution plan, and distributes the tasks across the cluster. 
+
+How Your Code Runs:
+1.You write Python, Scala, or SQL in a notebook.
+2.You attach that notebook to a Compute Cluster.
+3.The cluster's DBR environment interprets the language.
+4.The Spark Engine converts your code into distributed tasks.
+5.The cluster's physical hardware executes those tasks.
+
+
 Optimizing with Delta Engine in Databricks.
 ----------------------------------------------
 Delta engine is only available in Databricks. It is a high performing query engine built into Databricks Runtime helping to process and query data 
