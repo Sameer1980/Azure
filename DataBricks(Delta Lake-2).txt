@@ -669,13 +669,15 @@ SELECT
   tip_amount,
   tolls_amount,
   total_amount,
-  _metadata
+  _metadata,
+_rescued_data
 FROM read_files(
   '/Volumes/my_catalog/taxisdb/yellowtaxis/yellowtaxis.csv',
   format => 'csv',
   header => true
 )
-WHERE _rescued_data IS NULL;
+WHERE _rescued_data IS NULL; 
+/* _rescued_data is a special JSON-formatted column automatically created by Databricks Auto Loader (cloudFiles). It captures incoming data records that do not conform to your defined schema, preventing data loss or pipeline failures from unexpected schema changes.*/
 
 
 Working with Photon Execution Engine.
