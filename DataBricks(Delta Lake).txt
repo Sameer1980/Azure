@@ -2017,20 +2017,11 @@ CREATE INCREMENTAL LIVE TABLE YellowTaxis_BronzeLiveIncremental
 	 CreatedOn             TIMESTAMP
 
 )
-
 USING DELTA 
-
-
 LOCATION "/mnt/datalake/Output/YellowTaxis_BronzeLiveIncremental.delta"
-
-
 PARTITIONED BY (VendorId)
-
-
 COMMENT "Live Bronze table for YellowTaxis"
-
 AS
-
 SELECT RideId::Int
 	   ,VendorId::Int
 	   ,PickupTime::Timestamp
@@ -2050,11 +2041,9 @@ SELECT RideId::Int
 	   ,TipAmount::Double
 	   ,TollsAmount::Double,
 	   ,ImprovementSurcharge::Double
-	 
 	  ,INPUT_FILE_NAME() AS  FileName
 	  , CURRENT_TIMESTAMP() AS CreatedOn
-	  
-	  
+  
 FROM cloud_files(  "/mnt/datalake/Raw/YellowTaxis/",
                         "csv",
 						
@@ -2072,11 +2061,8 @@ df = (spark
         .load(f"{actual_data_location}/directory") # location of the actual data file
     )
 Auto Loader file detection…
-
-
 Cloud_files is an autoloader tool in Databricks that loads files continuosly from cloud storage(incrementally) as they arrive.
 It picks up files incrementally from storage that will help to load data incrementally into the table.
-
 # Create Incremental Live Bronze View. 
 
 # This is to apply data quality checks and fetch incremental data from Bronze Table.
@@ -2088,9 +2074,7 @@ CREATE INCREMENTAL LIVE VIEW YellowTaxis_BronzeLiveIncrementalView
 	CONSTRAINT Valid_RideId         EXPECT(RideId IS NOT NULL AND RideId > 0)           ON VIOLATION FAIL UPDATE 
 	
 )
-
 AS
-
 SELECT RideId              
 	  ,VendorId            
 	  ,PickupTime         
@@ -2100,20 +2084,15 @@ SELECT RideId
 	 ,TripDistance
 	 ,TotalAmount
      ,CreatedOn
-
      ,YEAR (PickupTime) AS PickupYear
 	 ,MONTH (PickupTime) AS PickupMonth
 	 ,DAYOFMONTH(PickupTime) AS PickupDay
-	 
 FROM STREAM (live.YellowTaxis_BronzeLiveIncremental)
 
 ** This View will only receive new records from Bronze Table .
 ** To pickup data from Bronze Table incrementally we have to use the STREAM function and pass it the Table name.
 
-
-
 B. Create Live Silver Layer
-
 B.1 Create Incremental Live Silver Table 
 
 CREATE INCREMENTAL LIVE TABLE YellowTaxis_SilverLiveIncremental
@@ -2133,10 +2112,8 @@ CREATE INCREMENTAL LIVE TABLE YellowTaxis_SilverLiveIncremental
 	  PickupDay            INT
 	  
 )
-
 USING DELTA 
 LOCATION "/mnt/datalake/Output/YellowTaxis_SilverLiveIncremental.delta"
-
 PARTITIONED BY (PickupLocationID)
 
 ** Note- If you are building an incremental table there are two options .
@@ -2144,13 +2121,9 @@ PARTITIONED BY (PickupLocationID)
  b)If you want to merge data do not define SELECT statement.
 
 B.2 Merge Change Incrementally into Silver table.
-
 APPLY CHANGES INTO live.YellowTaxis_SilverLiveIncremental
-
 FROM STREAM (live.YellowTaxis_BronzeLiveIncrementalView)
-
 KEYS (RideId , VendorId)
-
 SEQUENCE BY CreatedOn
 
 ** Note :- In DLT there is no MERGE statement so we have to use the 'APPLY CHANGES' command .
@@ -2228,6 +2201,40 @@ Go to Azure DataLake from portal and load one more file YellowTaxis2.csv(contain
 
 Trigger the pipline again. Will show only 4 records.
 
+/* Create a streaming table from UC volume.
+CREATE OR REFRESH STREAMING TABLE my_catalog.taxisdb.yellowtaxis__incremental
+USING DELTA
+AS
+SELECT 
+  vendor_id,
+  pickup_datetime,
+  dropoff_datetime,
+  passenger_count,
+  trip_distance,
+  rate_code,
+  store_and_fwd_flag,
+  pickup_longitude,
+  pickup_latitude,
+  dropoff_longitude,
+  dropoff_latitude,
+  payment_type,
+  fare_amount,
+  extra,
+  mta_tax,
+  tip_amount,
+  tolls_amount,
+  total_amount,
+  _metadata,
+  _rescued_data
+FROM STREAM read_files(
+  '/Volumes/my_catalog/taxisdb/yellowtaxis/',
+  format => 'csv',
+  header => true
+)
+WHERE _rescued_data IS NULL;
+
+REFRESH STREAMING TABLE my_catalog.taxisdb.yellowtaxis__incremental;
+ REFRESH STREAMING TABLE my_catalog.taxisdb.yellowtaxis__incremental FULL;
 
 ************************************ XX **********************************************************************************************
 
