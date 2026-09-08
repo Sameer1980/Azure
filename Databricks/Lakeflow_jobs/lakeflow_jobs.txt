@@ -1,0 +1,292 @@
+Orchestration - 
+Jobs can run practically anything , Eg: pipelines in sequence , notebooks, control flow, conditional statements , etc.
+Suppose I want to create a job that will orchestrate a notebook or two notebooks .So I will create two tasks . 
+One task will run at 8:00 pm and after it's completion second task will run.
+Or I have 3 notebooks . Notebook A will run and then after it's completion notebook B and C will run in parallel.
+
+Go to Jobs & Pipelines and create a new task.
+Name - Task-A
+Type - Notebook
+Source - Workspace
+Path - <your path>
+Notifications
+Retries - Retries at most [1 time(2 total attempts)] and wait 15 sec. between retries.
+Save Task .
+
+Create another task.
+Name - Task-B
+Type - Notebook
+Source - Workspace
+Path - <your path>
+Notifications
+
+Run if dependencies -> By default it's 'All Succeeded' but if we want to run Task B on Task A failure we can use "All failed" or "At least one failed".
+
+Create another Task.
+Name - Task-C
+Type - Notebook
+Source - Workspace
+Path - <your path>
+Notifications
+
+Suppose we want to run Task-C parallely with Task-B then we need to modify the 'Depends On' field , change it to Task-A .
+
+Run job.
+
+CONDITION BASED JOBS .
+---------------------------------------------------------------
+
+IF conditions 
+I want to run Task-B if it's weekend and Task-C if it's weekday .
+
+First of all delete both tasks Task-B and Task-C.
+
+Create a new Task which is based on If/else condition, 'IfSaturday'.
+
+In the Condition box insert a dynamic value reference , Eg: {{job.start_time.is_weekday}} or {{job.start_time.iso_weekday}} == 7 
+Click 'Save Task'.
+
+Create another task which is based on notebook., Task-B . By default it's connected to the True condition of the 'If/else' task . Map the path to Notebook-B.
+Create another task which is also based on notebook , Task-C . Change it's dependency to the False condition of 'If/else' task. Map the path to Notebook-C.
+
+Run the job.
+
+LOOPS BASED JOBS.
+----------------------------------------------------------------------
+Delete Job-A.
+Create a new job from scratch.
+Create a new task 'LoopTask' . Click the icon above to create a looping task.
+Or create a new task based on For-each loop. 'MyLoop'.
+
+Inputs -> [1,2,3,4,5]
+
+Concurrency-> This is optional . So if we want to run multiple iterations of the task parallely we can set this value , Eg: 5 so five iterations will run in parallel.
+Else by default one iteration will end then another will begin.
+
+Click on the button 'Add a Task to loop over'.  And name the task as 'LoopedTask'. Map the task path to 'Notebook-A'.
+Save Task.
+
+Delete the first task 'LoopTask'. 
+Run the job . 'LoopedTask' will run the 'Notebook-A' five times (5 iterations).
+
+DYNAMIC VALUES 
+------------------------------
+
+Notebook-A -> returns value
+Notebook-B -> Use the returned value from Notebook-A dynamically within Notebook-B.It's called Task Reference Values.
+So I will create a parameter within Notebook-B that will take value from Notebook-A and use it within Notebook-B.
+
+There is another notebook Notebook-C . There is a in-line variable that will use the value returned from Notebook-A directly bypassing Notebook-B.
+
+------------------
+
+Create a folder 'Intermediate' within 'Databricks_job' folder .
+Within this folder create a notebook 'Notebook-X'.
+
+df = spark.createDataFrame([("James",40),("Ann",45),("Jeff",35),("Sally",30)],["name","age"])
+display(df)
+
+We need to create some type of monitoring to know how many records got processed .
+---------------------------------------------------------------------------------------
+total_records = df.count()
+total_records
+
+There is a new utility added in Databricks which takes in the variable as key-value pair.
+dbutils.jobs.taskValues.set("total_records",total_records) OR dbutils.jobs.taskValues.set(key = "total_records",value = total_records)
+
+Create another notebook named 'Notebook-Y' .
+dbutils.widgets.text("records_processed","")
+
+--eval(dbutils.widgets.get("para1")
+records_processed = dbutils.widgets.get("records_processed")
+records_processed
+
+Create another notebook named 'Notebook-Z' .
+dbutils.jobs.taskValues.get(,"total_records") --INCOMPLETE . Will get completed only after the tasks get created .
+
+Create a new task named Task-X. Map the path to the 'Notebook-X' .
+Create a new task named Task-Y. Map the path to the 'Notebook-Y' .
+|
+|
+|----> Create a parameter under Task-Y. Give the keyname as "records_processed" and value as "total_records"
+ Parameters : Key - records_processed , Value - {{tasks.`Task-X`.values.total_records}}
+ 
+ Create a new task named Task-Z. Map the path to the 'Notebook-Z' . Change dependency to Task-X.
+ 
+ In Notebook-Z change the key value to :
+ dbutils.jobs.taskValues.get("Task-X","total_records")
+ 
+ Run the job .
+ 
+ -- Passing parameters to the SQL.
+ Create a catalog named 'db_jobs' .
+ Under /Databricks_job/Intermediate/ create a new file named 'first_file.sql' .
+ 
+ CREATE TABLE db_jobs.default.orders 
+(
+    id INT,
+    customer_id INT,
+    order_date DATE,
+    order_status STRING,
+    total_amount DECIMAL(10,2)
+);
+
+INSERT INTO db_jobs.default.orders
+VALUES 
+(1,101,'2026-01-01','shipped',50.00),
+(2,102,'2026-01-02','shipped',75.00),
+(3,103,'2026-01-03','shipped',100.00),
+(4,104,'2026-01-04','shipped',125.00);
+
+Remove the above code and write the below SQL query .
+
+SELECT 
+*
+FROM
+db_jobs.default.orders
+WHERE
+id = 3;
+
+ 
+SELECT 
+*
+FROM
+ db_jobs.default.orders
+WHERE
+ id = :var_id
+ 
+Go back to 'Jobs & Pipelines' and delete the Task-Y .
+Create a new task named 'SQL_Query' , Type should be 'SQL file' .
+Set the new path to be mapped to the 'first_file.sql' .
+
+Set the parameter . Key - var_id , Value - {{tasks.`Task-X`.values.order_id}}
+Click on "Create Task". 
+
+Create a notebook "Notebook-SQL"
+dbutils.widgets.text("sql_output","")
+dbutils.widgets.get("sql_output")
+
+Go back to 'Jobs & Pipelines'  and create a new task "SQL_Output"
+Map the path to "Notebook-SQL".
+
+In 'Parameters' set 'Key' as "sql_output" and 'Value' as "{{tasks.SQL_Query.output.rows}}"
+
+So it will create a array of dictionaries , like querying the table 'db_jobs.default.orders' produces rows.
+So each field name will be the key and the field value will be the value.
+'[{"customer_id":"103","id":"3","order_status":"shipped","order_date":"2026-01-03","total_amount":"100.00"}]'
+
+Repair Task button will start running the job from the point of failure of the previous run.
+
+Real Time Scenario
+---------------------------------------               LOOP(FOR-EACH)
+|===================================     |===================================           |-----------------------------
+|                                  |     |  ARRAY OF DICTIONARIES           |           |                            |
+|   SOURCE (300 files)             |---->|[{"file_name":"file_1"}           |------->   |NOTEBOOK                    |
+|                                  |     | {"file_name":"file_n"}           |           |                            |
+|----------------------------------|     |===================================           |-----------------------------
+
+A. Create a folder 'Advanced'  and within that folder a notebook 'Ingestion'.
+B. Go to the catalog and within 'db_jobs' under default schema create a Volume 'raw_data'. 
+C. In 'Ingestion' notebook :
+    dbutils.widgets.text("file_name","")
+	
+	file_name = dbutils.widgets.get("file_name")
+	
+	df = spark.read.format("parquet")\
+	                  .load(f"/Volumes/db_jobs/default/raw_data/{file_name}.parquet")
+					  
+	df.write.format("delta")\
+       .mode("overwrite")\
+       .save(f"/Volumes/db_jobs/default/raw_data/sink/{file_name}")
+	   
+D. Create another notebook 'array'.
+file_names = [
+    {"file_name": "orders"},
+    {"file_name": "products"},
+    {"file_name": "regions"}
+]
+	
+dbutils.jobs.taskValues.set(key = "file_names", value = file_names)
+
+E. Create a new job and add a Task "Array". Set that Path to 'Array' notebook.
+
+D. Add another Task , a For-each loop . Name it as 'DynamicIngestion'. Input -> {{tasks.Array.values.file_names}}
+
+E. We need to add the 'ingestion' notebook. Click 'Add a task to loop' . Set the path to 'Ingestion' notebook.
+
+F.Add a parameter - 'Key'-> file_name , 'Value' -> {{input.file_name}}. Click 'Create task' .
+
+G. Run the job.
+
+H. Validate . Go to catalog -> 'db_jobs' -> Volumes -> 'raw_data' -> 'sink' . We will have all three folders 'orders', 'products', 'regions'. 
+
+I. Instead of using an array we can also using a mapping table .
+So create a query notebook 'mapping_table' .
+
+CREATE TABLE db_jobs.default.mapping
+(
+    file_name STRING
+);
+
+INSERT INTO db_jobs.default.mapping
+VALUES
+('orders'),
+('regions'),
+('products')
+
+Replace the above code with . 
+select * from mapping; 
+
+J. Go to 'Jobs & Pipelines' and delete the 'Array' Task. It won't be allowed because it has got dependency . So we need to create another Task before deleting
+the 'Array' Task.
+
+K.Create a new task 'SQL_Array' , Type -> SQL_Query, SQL_Query -> 'mapping_table' , SQL warehouse -> 'Serverless Starter Warehouse' .
+
+L.Modify the task name , 'DynamicIngestion' . 
+Change concurrency to 4. 
+Change dependency to 'SQL_Array'.
+Change the value of 'Input' parameter : {{tasks.SQL_Array.output.rows}}
+Save Task.
+Now you can delete the 'Array' Task.
+
+M. Save the query 'select * from mapping; '
+
+N. Go to 'Ingestion' and in the 4th cell change 'sink' to 'sinkSQL' ,  [.save(f"/Volumes/db_jobs/default/raw_data/sinkSQL/{file_name}")]
+
+O. Vaildate by going to Catalog. 'db_jobs' -> 'default' -> 'Volumes' -> 'raw_data'/sinkSQL. There will be three folders 'orders' , 'products' and 'regions' .
+
+-------------------- Creating Alerts ---------------------------------------------------------------------------------------------------------------------------
+
+A.Go to Alerts and create a new alert . 
+B. Run the below query .
+C. select * from db_jobs.default.orders;
+If the total_amount > 300 create and set an alert .
+
+'select sum(total_amount) as total_revenue from db_jobs.default.orders';
+Set the column as 'total_revenue' and condition >= 300 
+Go to the 'Notifications' and select your mail id .
+Go to settings -> Notifications -> Notification destinations -> Manage -> Add destination , select email and set the values.
+You can also schedule it to run every minute , hour ,day, week and month at a particular fixed time.
+
+---------------------------Scheduling a job--------------------------------------------------------------------------------------------------------------------
+First of all rename the job to give it a meaningful name .Eg:'Job_DataIngestion'. 
+Go to Schedules & Triggers section -> Add trigger -> choose from options like 'schedule' ,'File arrival' , 'Continuos' , etc. 
+
+===================================================X============================================================================================================
+
+
+
+ 
+
+
+
+
+	
+
+
+
+
+
+
+
+
