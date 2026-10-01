@@ -67,6 +67,8 @@ Compute Clusters (The Hardware): This is the actual collection of cloud virtual 
 Databricks Runtime / DBR (The Operating Software): This is the software stack installed on those machines. It includes the operating system, optimized libraries, Python/Scala environments, and the specific version of Spark.
 Spark Engine (The Execution Brain): This is the core engine bundled inside the DBR. It takes your SQL, Python, or Scala code, translates it into an optimized execution plan, and distributes the tasks across the cluster. 
 
+How to find your DBR version : spark.sql("SELECT current_version().dbr_version").show()
+
 How Your Code Runs:
 1.You write Python, Scala, or SQL in a notebook.
 2.You attach that notebook to a Compute Cluster.
@@ -495,6 +497,8 @@ FROM TaxisDB.YellowTaxis VERSION AS OF 0 ;
 
 Enabling Auto Optimization on Delta tables.
 ------------------------------------------------
+Databricks Runtime 13.3 LTS and Above: All tables registered in Unity Catalog have optimized writes enabled by default for CTAS and INSERT operations on partitioned tables.
+
 Auto Optimize features:- 
 Optimized Writes                                        Auto Compaction                                       
 (Auto bin-packing while writing)                     (Auto bin-packing after writing)
