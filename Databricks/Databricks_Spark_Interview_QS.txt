@@ -1,0 +1,591 @@
+Turn off AQE 
+
+spark.conf.set("spark.sql.adaptive.enabled", "false")
+
+Q1) You have a Spark job that needs to process 10GB of data. How would you decide the number of cores and memory per executor for this job?
+Explain your reasoning.
+
+A)EXECUTOR - say 10 GB
+Inside a Executor / Spark Pool:
+ Spark Executor Memory or JVM Heap Memory(spark.executor.memory):
+This is primary block managed by the JVM where your actual Spark code executes.
+It is strictly subdivided into four distinct spaces:
+A) Unified Memory Pool(Default 60% or 6GB-300MB of remaining heap):The core space where Spark handles data processing. This pool dynamically shares memory between two segments based on workload demands. Divided into two parts- 
+                                         i)Storage Memory(caching) 50%- Used for caching data frames, storing RDD persistence states, and handling broadcast variables.
+                                          ii) & Execution Memory 50%- Used for intensive computational operations like shuffles, joins, sorts, and aggregations.
+B)User memory = 40% (4GB - 300MB)- Used for non-Spark operations, such as user-defined data structures, custom RDD transformations, internal metadata, and User-Defined Functions (UDFs).It is controlled by 1 - spark.memory.fraction.
+C)Reserved memory:(Fixed 300MB)-  Hardcoded safety buffer reserved entirely for Spark’s internal framework processes. It cannot be adjusted or used for your tasks. If your overall heap size is too small (less than 450 MB), Spark will throw a "please use large heap size" error.
+
+128MB = 1 partition
+10 GB data = 80 partitions
+
+[Calculation: 10GB * 1024MB = 10240MB 
+10240MB / 128MB/partition = 80 partitions]
+
+80 partitions -> 80 cores -> 10 executors (8 cores per executor)
+
+1 partition -> 1 task -> 1 core 
+
+8 cores = 8 partitions(128 MB each) = 1GB
+
+
+Q2)You are working as a Data Engineer in a company where daily ingestion jobs write data into a Data Lake (Delta/Parquet) . Over time , the storage is filled with 
+thousands of small files , causing slow query performance and high job runtimes. 
+
+How would you tackle the small file problem ?
+- While writing the data into the Data Lake 
+- After the data is already written?
+
+2nd part 
+OPTIMIZE COMMAND - DELTA LAKE 
+OPTIMIZE <table_name> ;
+
+1st part - Optimize write 
+df.write.format("delta")\
+        .option("optimizeWrite",True)\
+		.mode("append")
+		.save ("/filename")
+		
+Q3) How does Spark's Unified Memory Manager allocate memory between execution and storage memory in this scenario?
+How does Spark reallocate memory dynamically when execution needs more memory and what happens to cached data during this process?
+-Jobs are slowing down.
+-Cached Dataframes are evicted.
+
+A) Spark memory has two parts - Executor memory & Storage memory 
+
+-------------------------------------------------------------------------| |---------------------------------------------------------------------------
+  EXECUTOR MEMORY                                                    Soft boundary                                 STORAGE MEMORY
+  
+ If the executor memory is filled up with dataframes and to some extent storage memory is also full , and more objects need to be stored , in that case 
+ Executor memory will take precedence and some of the objects in Executor memory will be stored in the Storage memory . This will be done after evicting some 
+ of the objects from the Storage memory based on LRU algorithm.
+ 
+ Scenario 2 : If data gets filled up in both parts of the memory , it will then start spilling over to disk.
+
+Q4) Your team receives event data as files landing continuously in cloud storage . The source team sometimes add new columns or changes the schema without prior notice.
+You need to process these files in near-real time and load them into Delta table without breaking the pipeline .
+How would you design this streaming solution to handle schema changes safely ? What Spark/ Databricks features would you use ?
+
+A) Spark Structured Streaming and AutoLoader . AutoLoader is built on top of Spark Structured Streaming.
+There is a special folder called 'CheckpointLocation' which is managed by AutoLoader, so it will load incremental data meaning it will only load the new data .
+It won't load data that it has already loaded yesterday. The main purpose of checkpoint is idempotency. Meaning a file once processed will not be processed again.
+
+Scenario 2 : If the source file has data with an extra column then also it will be handled by AutoLoader. It has got another folder called as 'SchemaLocation'.
+'SchemaLocation' will capture the schema of the source and pass information to the autoloader who will write at the destination with new schema.
+
+The first file will be cached before the information is written to 'SchemaLocation' and that information will be passed to AutoLoader.
+The second file with new schema will be cached and schema information will be stored in the 'SchemaLocation' folder and this information will be passed to AutoLoader.
+
+Autoloader Schema inference.- So the first time a file arrives with new schema, AutoLoader will throw error(UnknownFieldException) because the information is not cached or stored in the 
+'SchemaLocation' folder. However if we restart the streaming it will automatically infer the schema in the next run as the Schema information is now stored in the cache as well 
+as 'SchemaLocation' folder.
+
+Autoloader schema evolution. - Modes -> a) addNewColumns - Stream fails and new columns are added to the schema, b) rescue- Schema is never evolved and stream does not fail due to schema changes.All new columns are 
+recorded in the '_rescued_data' column ,c) failOnNewColumns - It will simply fail the stream, d) none- Does not evolve the schema , new columns are ignored and data is not rescued.
+Stream does not fail due to schema changes.
+
+Eg: Create a catalog 'interview_catalog' and a schema named 'Source' .Create a volume 'my_volume' .Upload a file to the volume.
+Create a directory named 'destination' and within that directory another folder named checkpoint.
+
+.trigger(once=True) processes all available data in a single massive micro-batch and is deprecated, whereas .trigger(availableNow=True) processes all available data,split across multiple well-managed micro-batches and is the recommended standard.
+
+.start("/Volumes/interview_catalog/source/my_volume/destination/data/")Triggers the actual execution of the stream and sets the output directory path. In this case, it is saving the Delta tables into a Databricks Unity Catalog Volume path
+
+
+df = spark.readStream.format("cloudfiles")\
+            .option("cloudFiles.format","csv")\
+            .option("cloudFiles.schemaLocation","/Volumes/interview_catalog/source/my_volume/destination/checkpoint")\
+            .option("cloudFiles.schemaEvolutionMode","rescue")\
+            .option("cloudFiles.useManagedFileEvents", "True")\
+            .load("/Volumes/interview_catalog/source/my_volume/destination/source/")
+
+df.writeStream.format("delta")\
+            .option("checkpointLocation","/Volumes/interview_catalog/source/my_volume/destination/checkpoint")\
+            .trigger(availableNow=True)\
+            .start("/Volumes/interview_catalog/source/my_volume/destination/data/")    
+
+
+%sql
+select * from delta.`/Volumes/interview_catalog/source/my_volume/destination/data/` 
+
+Load another file into 'source' - 'sales2.csv'
+
+Run this again:
+df.writeStream.format("delta")\
+            .option("checkpointLocation","/Volumes/interview_catalog/source/my_volume/destination/checkpoint")\
+            .trigger(availableNow=True)\
+            .start("/Volumes/interview catalog/source/my_volume/destination/data/")    
+			
+Then 
+select * from delta.`/Volumes/interview_catalog/source/my_volume/destination/data/` 
+
+We will see the contents in '_rescued_data' column.
+The pipeline did not fail. 'sales2.csv' with a different schema got processed.
+
+We have four folders inside the 'checkpoint' . /Volumes/interview_catalog/source/my_volume/destination/checkpoint/
+
+_schemas , commits, offsets , sources.
+
+Autoloader SQL API:
+------------------------------------
+To continuously stream files from an external object storage cloud path (like Amazon S3, ADLS, or GCS) into a Delta table, you use the read_files function inside a STREAMING TABLE.
+(Recommended)
+A) CREATE OR REFRESH STREAMING TABLE sales_bronze
+AS SELECT * 
+FROM STREAM read_files(
+  's3://my-company-bucket/raw/sales_data/*',
+  format => 'json',
+  header => 'true'
+);
+ 
+(Legacy)
+B) CREATE OR REFRESH STREAMING TABLE sales_bronze
+AS SELECT * FROM cloudFiles('s3://my-bucket/path', 'json');
+
+C)Inspecting Pipeline State with cloud_files_state: If you need to verify which files Auto Loader has already discovered, processed, or skipped, Databricks provides a specific SQL system function called cloud_files_state.
+This function queries the internal RocksDB checkpoint to reveal the state of the stream.
+
+SELECT * 
+FROM cloud_files_state('dbfs:/checkpoints/sales_bronze_checkpoint');
+
+%sql
+SELECT * 
+FROM cloud_files_state('/Volumes/interview_catalog/source/my_volume/destination/CheckpointLocation');
+
+There are two AutoLoader file detection modes - 1) Directory listing mode, 2) File notification mode.
+
+Enable file events(File notification mode with file events):
+---------------------------------------------------------------
+File events require a one-time cloud permissions grant and an external location configured to use the managed file events service.
+Once set up, all Auto Loader streams reading from that external location can use file events without additional configuration.
+
+a) Create a storage credential and external location in Unity Catalog that grant access to the source location in cloud storage for your Auto Loader streams.
+b)Enable file events for the external location in Unity Catalog.
+c) Grant the required cloud permissions on the cloud provider side. Requirements vary by cloud provider.
+d)Set cloudFiles.useManagedFileEvents to true in your Auto Loader query.
+
+df = (spark.readStream\
+  .format("cloudFiles")\
+  .option("cloudFiles.format", "json")\
+  .option("cloudFiles.useManagedFileEvents", "True")\
+  .load("/path/to/data/dir"))
+
+
+Q5) Your team is building a data platform on Databricks.
+- Daily ETL jobs run once a day and finish in 20-30 min.
+- Ad-hoc analysis is done by data engineers and analysts throughout the day.
+- Cost optimization and cluster stability are important.
+
+How would the architecture differ if you use Serverless Compute vs All-Purpose Compute for this setup ?
+Which workloads would you place on each and why?
+
+A) In all-purpose clusters(Classic compute)the cluster is configured in the Cloud VMs like Azure , AWS or GCP. Data is stored in the ADLS , AWS S3 or GCS. 
+In serverless compute the cluster in configured in Databricks itself while data continues to be stored in any of the clouds.
+So serverless compute is more flexible , runs faster and scaleup or down as it is natively hosted in Databricks .
+
+ Q6) You are working as a data engineer for an e-commerce company. The business team tracks a daily revenue KPI in Databricks using a Delta table.
+ 
+ If daily revenue drops by more than 10% compared to the previous day, the business stakeholders should get an alert immediately on email or slack.
+ How would you design and implement alerts in Databricks to notify the respective stakeholders ?
+ 
+ Go to Alerts.
+ Go to SQL Editor or Queries to create a new table. Select 'Interview Catalog' and 'source' schema .
+ CREATE TABLE sales 
+(
+    ID int,
+    product STRING,
+    revenue float
+);
+
+INSERT INTO sales VALUES
+    (1,'shoes',100),
+    (2,'shirts',200),
+    (3,'pants',300),
+    (4,'shoes',400);
+
+
+Go to Alerts .
+SELECT 
+   SUM(revenue) AS total_revenue
+   FROM interview_catalog.source.sales;
+ 
+ Suppose I want a alert if the total revenue is reduced to Rs. 800 .
+ 
+ SELECT 
+   SUM(revenue) AS kpi
+   FROM interview_catalog.source.sales;
+   
+ Go to Alert Condition on the right hand side . First row select 'KPI' < static value -> 1000. Test condition.
+Notifications - select the emailIds to share notifications.
+Notification frequency - once 
+
+Q7) Your finance and business teams use Databricks for analysis , but they are not comfortable editing SQL queries.
+They often ask you to run the same SQL logic again and again , just with different dates , countries and product names .
+
+How would you design re-usable SQL queries in Databricks so that non-technical users can run the analysis by just changing inputs, without touching the core SQL 
+logic ?
+
+A) Answer parameterized query. Create a parameterized query and share it with the business users .
+SELECT * FROM sales WHERE product = :product_filter;
+
+Q8) Your organization is using multiple Databricks workspaces (dev,test,prod) across different teams. Data is stored in a centralized cloud storage account, and you want:
+- Fine-grained access control(table, column, row level)
+- A single governance layer across all workspaces
+- Central auditing and lineage.
+
+How would you design the architecture using Unity Catalog in a modern Databricks workspace?
+Explain the key components involved(metastore, catalogs, schemas , storage, and access control) and how they interact.
+
+A) Unity Catalog Architecture - i) Each catalog can talk to each other since they are connected to the same metastore.
+                               ii) Each Unity Catalog is connected to the same storage account.(ADLS Gen2)
+                               iii) All the auditing and lineage will be taken care of by the Unity Catalog.
+                               iv) We can see everything under the Unity Catalog ['Govern', 'Connect'(to external cloud storages like AWS S3 bucket and ADLS) and 'Share']
+    
+   
+                          Unity Metastore -> attached to the cloud storage/ Region(ADLS Gen2)
+             |-------------------|------------------|
+ DatabricksCatalog  DatabricksCatalog   DatabricksCatalog
+ (DEV)                     (TEST)                 (PROD)
+   |                         |                      |
+  Schema                   Schema                 Schema
+   |                         |                       |
+Delta table                 Functions(fx)          Delta table
+
+Q9) Your team uses a Serverless SQL Warehouse for BI dashboards. During business hours, hundreds of users hit the dashboard and queries slow down . At night usage drops to almost 
+zero.
+Which compute type would you choose for the SQL Warehouse and how does it scale automatically to handle this pattern? Refer from Google -> Databricks SQL Warehouse compute
+
+A) There are three types of SQL Warehouses - Serverless , Pro and Classic.
+ Classic - Supports Photon Engine.
+Pro - Supports Photon Engine and Predictive IO.
+Serverless - Supports Photon Engine, Predictive IO and Intelligent Workload Management(IWM).
+  
+Whenever we pick the Classic and Pro SQL Warehouses we pick the cluster size. Eg: 2X-small , X-small, Small, Medium, Large, X-large ,etc.
+For Classic and Pro SQL Warehouses, autoscaling adds clusters based on the estimated time to process all running and queued queries. 
+So if we have added a medium size clusters of 8 workers it will add another cluster of the same size and number of workers.	
+
+- 2-6 min. of query load: Add 1 cluster
+- 6-12min.: Add 2 clusters
+- 12-22 min: Add 3 clusters
+- Over 22 min. : Add 3 clusters plus 1 more for every additional 15 min. of load. 
+
+Sizing and cluster provisioning:
+When creating a classic and pro warehouse , choose a cluster size and set the minimum and maximum number of clusters. These SKUs have a fixed limit of one cluster per 10 
+concurrent queries.
+
+For a serverless SQL Warehouse - Cluster size (eg: X-small, Medium, Large) determines the compute resources available for a single cluster. The AutoScaler adds or removes clusters 
+of that size as needed. Since it uses IWM(Intelligent Workload Management) it can predict better.
+
+- Start with a single larger warehouse and let serverless features manage concurrency and performances. It is usually more efficient to size down if necessary than to start small and 
+  scale up.
+- If queries are spilling to disk, increase the cluster size. Check for spills in the query profile.
+- For workloads with many concurrent queries, configure a sufficient maximum number of clusters to handle peak loads.
+  Monitor the 'Peak Queued Queries' metric on the warehouse monitoring page.
+
+Q10) Your company has a Databricks Lakehouse with Delta tables for sales, customers and transactions. 
+    Business users(non-technical) want to ask questions in plain English like:
+- "What were last quarter's top selling products in Canada?"
+
+A10) Create a chatbot on a Delta Lake that the user can query and get answers in plain English.
+    We will be using 'Genie Agents' .
+   - From 'Genie' or 'Genie Agents' on the leftside window pane , click 'New' -> select the catalog(Eg: 'interview_catalog')-> select schema(Eg: 'source')-> select the table
+     (Eg: 'sales'). We can add multiple tables as well. We can now go to the chat and the question "What is the total sales for the organization?" . It will give the answers.
+
+ ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Create a new directory or folder under 'interview_catalog' -> 'source' -> Under volumes 'my_volume' -> 'pyspark(new folder).
+Upload the three files - 'dim_airports.csv' , 'dim_passengers.csv' , 'fact_bookings.csv'
+
+Go to workspace -> 'Databricks_PySpark_interview' -> Create a new notebook 'pyspark_coding'.
+
+Create a Markdown (text) cell. (Please note decreasing the number of hashes will increase the text font size and vice-versa.)
+%md 
+###Exploration
+
+%sql
+SELECT * FROM csv.`/Volumes/interview_catalog/source/my_volume/pyspark/dim_airports.csv`
+
+# Check out for the passengers data 
+%sql
+SELECT * FROM csv.`/Volumes/interview_catalog/source/my_volume/pyspark/dim_passengers.csv`
+
+
+%sql
+SELECT * FROM csv.`/Volumes/interview_catalog/source/my_volume/pyspark/fact_bookings.csv`
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Q11) You work as a Data Engineer at an airline company. The business team wants to understand how flight tickets sales are trending over time to plan pricing and promotions.
+Using PySpark how would you analyze the trend of flight ticket sales over time (daily or monthly)?
+
+A)
+df = spark.read.format("csv")\
+            .option("header", True)\
+            .option("inferSchema", True)\
+            .load("/Volumes/interview_catalog/source/my_volume/pyspark/fact_bookings.csv")
+
+display(df)
+
+B) 
+df = df.groupBy("booking_date").agg(round(sum("amount"),2).alias("total_amount")).sort("booking_date")
+display(df)
+
+C) To create a visualization click on the '+' and select 'Visualization' and then click 'save'. This will help to analyze the trend.
+
+Q12) You work as a Data Engineer for an airline analytics team. The business wants to identify the top 5 airports based on total flight ticket sales for the last few months.
+     How would you calculate the top 5 airports by total sales revenue? Explain the logic.
+
+A) First I would analyze where the data is originating from (which tables or files). Whether it is coming from one source or multiple sources.
+   So I identified two sources,one is the 'dim_airports.csv' and the other one is the 'fact_bookings.csv'.
+  
+   %sql
+SELECT * FROM csv.`/Volumes/interview_catalog/source/my_volume/pyspark/dim_airports.csv`
+
+%sql
+SELECT * FROM csv.`/Volumes/interview_catalog/source/my_volume/pyspark/fact_bookings.csv`
+
+  I will apply a join between 'dim airports' and 'fact table' to fetch the airport name associated to each airport ID for each sale.
+  Then I will perform the aggregation. Then I will sort the data. Then I will fetch only the top 5 airports.
+  
+df_airport = spark.read.format("csv")\
+                .option("header", True)\
+                .option("inferSchema", True)\
+                .load("/Volumes/interview_catalog/source/my_volume/pyspark/dim_airports.csv")
+
+df_booking = spark.read.format("csv")\
+               .option("header", True)\
+               .option("inferSchema", True)\
+               .load("/Volumes/interview_catalog/source/my_volume/pyspark/fact_bookings.csv")
+
+df_passengers = spark.read.format("csv")\
+               .option("header", True)\
+               .option("inferSchema", True)\
+               .load("/Volumes/interview_catalog/source/my_volume/pyspark/dim_passengers.csv")
+
+
+from pyspark.sql.functions import sum
+
+df_join = df_booking.join(df_airport,"airport_id","left")\
+    .select("airport_id","amount","airport_name")
+
+df_group = df_join.groupBy("airport_name").agg(sum("amount").alias("total_amount"))\
+                                     .sort("total_amount",ascending=False).limit(5)
+
+display(df_group)
+
+We can also do the Visualizations by clicking on '+' and 'save' to save the bar-chart.
+
+Q13) Every booking generates a sale amount for a flight . Management wants to track monthly performance trends, so they ask you to calculate a running total of sales for each flight, but 
+     the total sales should reset at the start of every month.
+A)  
+
+from pyspark.sql.window import Window
+from pyspark.sql.functions import *
+
+window_spec = Window.partitionBy(month("booking_date")).orderBy("booking_date").rowsBetween(Window.unboundedPreceding,Window.currentRow)
+
+df_run = df_booking.withColumn("running_total" ,sum("amount").over(window_spec))
+display(df_run)
+
+Q14) You are assigned to find the revenue generated by each city so far and tag those cities as high , mid , low based on the revenue buckets .
+      - Less than 1000(low)
+      - Between 1000 and 20000(mid)
+      - More than 10000(high)
+
+A) from pyspark.sql.functions import *
+df = df_booking.join(df_airport,"airport_id","left")\
+      .select(col('airport_id'),col('amount'),col('airport_name'),col('city'))
+df = df.groupBy("city").agg(sum('amount').alias("total_amount"))
+
+df = df.withColumn("tag", when(col('total_amount')<1000,lit("low")).when(col('total_amount')<20000,lit("medium")).otherwise(lit("high")))
+
+display(df)
+
+Q15) Multiple source systems send data with different schemas, but all of them contain some common numeric columns that need aggregation. The business frequently changes:
+      
+    - Which columns to aggregate.
+    - Which aggregation functions to apply(sum, avg, max, count, etc.)
+    - Hard-coding logic everytime is not acceptable.
+
+A)  '.agg' works only with "col" attribute.
+
+class my_utility:
+
+    def __init__(self):
+        pass
+
+    def aggregator(self,df,groupby_col,aggregator_col,agg_type):
+        df = df.groupBy(groupby_col).agg(agg_type(aggregator_col))
+        return df
+
+
+from pyspark.sql.functions import sum 
+obj = my_utility()
+
+df_results = obj.aggregator(df_booking,'airport_id','amount',sum).alias("total_amount")
+display(df_results)
+
+Q16) You have a large Delta table in Databricks(billions of rows) used for analytics. Due to data privacy rules, you need to delete a small subset of records frequently(for example
+     user-requested deletes). Rewriting the entire data files every time is slow and expensive.
+
+How do deletion vectors in Databricks help in this scenario? 
+What do they do under the hood, and how do they improve performance compared to traditional deletes?
+
+A) 1)Deletion vectors in Databricks implement a merge-on-read (soft delete) approach for Delta Lake and Apache Iceberg tables to accelerate DELETE, UPDATE, and MERGE operations.
+2) Deletion vectors avoid full rewrites.Without deletion vectors, modifying or deleting even a single row requires rewriting the entire Parquet file that contains that record,
+causing heavy write amplification.
+3) With deletion vectors enabled, Databricks does not rewrite the Parquet file immediately.Instead, it marks the deleted or updated rows using a compact bitmap format
+(like a RoaringBitmap) stored in metadata (either in the Delta transaction log or as separate sidecar files).
+
+4)Read-Time Resolution:When you query the table, the query engine reads the active Parquet data files and dynamically applies the deletion vector metadata 
+at query time to filter out the logically deleted rows.
+
+5)When we have a Delta table and we do a delete it adds one new parquet file . So if we have 3 files and we are deleting from file1 , file4 will be added and all records(billion rows)
+from file1 minus the deleted records will be loaded into this file. 
+
+So if we have a Deletion Vector enabled it will not rewrite the whole file but it will create a file named as 'Deletion Vector' .It will store what records to delete?
+It can be metadata, IDs, other data, anything.
+
+So when we are trying to read the data we are using the same files but we have something called as Deletion Vector. So we will not read those records that are deleted.
+In the parquet file1 records will be marked as deleted using the Deletion Vector. So when we are reading the file or the data we will not display those records.
+This way we do not need to rewrite the billions of records again and again.
+
+Q17) You are working on a Delta table in Databricks that stores daily transaction data. While fixing a bug you accidentally ran a DELETE statement that removed a large number of valid 
+     records from the table.
+    The job completed successfully, but later you realized the mistake.
+
+  How would you recover the table to it's previous state using Delta Lake?
+
+A)So whenever we are doing anything on the table , adding data , merge, delete , updating the data , we are creating versions of it.
+  
+    INSERT ----> DELETE -------> RESTORE
+     V1           V2               V1
+
+Create a new notebook 'DeltaLake'.
+1)
+%sql
+select * from interview_catalog.source.sales;
+
+2)
+%sql
+DELETE FROM interview_catalog.source.sales;
+
+3)
+%sql
+DESCRIBE HISTORY interview_catalog.source.sales;
+
+4)
+%sql
+SELECT * FROM interview_catalog.source.sales VERSION AS OF 1;
+
+5)
+%sql
+RESTORE interview_catalog.source.sales TO VERSION AS OF 1;
+
+Q18) You have a Delta table with 2-3 TB data where new records are continuously appended.
+     Earlier it was partitioned by date, but now queries filter on customer_id and region, and partitions are causing too many small files.
+
+    How would liquid clustering help here, and why it is better than traditional partitioning? 
+
+A) Earlier partitioned data(parquet files) used to be stored on different folders. So if partitioned by date, one folder would be '2023', another folder '2024', '2025',....etc.
+   So millions of small files would be created and it would lead to small files problems and lot of overheads would be created to manage those partitions.
+   With Liquid Clustering we do not need to do any sort of partitioning. It will create a kind of Logical Clusters/Partitions. Not physical but logical partitions.
+   As new data gets appended, Databricks will automatically cluster the files based on certain columns. Those columns that we will pick for Liquid Clustering.
+  Similar values will be clubbed together and this will help to fetch the data faster. So less data will be scanned and it will run faster. 
+   Liquid Clusters are ever evolving. They will evolve with the query patterns as well.
+
+When to use Liquid Clustering?
+Databricks recommends liquid clustering for all new tables, including streaming tables and materialized views. 
+- Tables that are often filtered by high cardinality columns.
+- Tables that have skew in data distribution.
+- Tables that grow quickly and require maintenance and tuning effort.
+- Tables that have concurrent write requirements.
+- Tables that have access patterns that change over time.
+- Tables where a typical partition key could leave the table with too many or too few partitions.
+
+SQL-
+-- Create an empty Delta table with clustering on col0
+CREATE TABLE table1(col0 INT, col1 STRING) CLUSTER BY (col0);
+
+-- Create table from existing data with clustering
+CREATE TABLE table2 CLUSTER BY (col0)
+AS SELECT * FROM table1;
+
+-- Copy table structure including clustering configuration
+CREATE TABLE table3 LIKE table1;
+
+-- Cluster by Auto. It will pickup the most suitable columns for Liquid Clustering.
+CREATE OR REPLACE TABLE table1(column01 int, column02 string) CLUSTER BY AUTO;
+
+-- Enable automatic Liquid Clustering on an existing table.
+   ALTER TABLE table1 CLUSTER BY AUTO;
+
+-- Disable automatic Liquid Clustering on an existing table.
+ ALTER TABLE table1 CLUSTER BY NONE;
+ 
+Python -
+(DeltaTable.create()
+  .tableName("table1")
+  .addColumn("col0", dataType = "INT")
+  .addColumn("col1", dataType = "STRING")
+  .clusterBy("col0")
+  .execute())
+  
+df = spark.read.table("table1")
+df.write.clusterBy("col0").saveAsTable("table2")
+
+After enabling liquid clustering, Run OPTIMIZE jobs to incrementally cluster data.
+
+
+1. Liquid Clustering (clusterBy)
+
+When you use clusterBy("col0"), Spark applies modern layout techniques (like Delta Lake's Liquid Clustering).
+• How it works: Instead of forcing data into rigid folders, Spark clusters the rows with similar col0 values together within the data files. It uses Z-order-like curves dynamically.
+• Why use it: If col0 is something like customer_id or transaction_date with millions of unique values, clusterBy ensures your queries remain lightning-fast when filtering on col0 without creating a storage nightmare.
+-No Folder Partitioning: Unlike traditional partition columns, liquid clustering does not create separate physical folder paths (such as year=2026/month=11/) on cloud storage.
+Instead, it maintains a flat directory structure where similar values for your clustering keys are grouped together inside the data files.
+- 
+
+
+2. Partitioning (partitionBy)
+
+When you use partitionBy("col0"), Spark uses traditional Hive-style partitioning.
+• How it works: Spark creates a literal folder on your cloud storage/file system for every single unique value in col0.
+• Why use it: This is highly effective for file pruning only if the number of unique values is small (typically under a few hundred). If col0 has thousands or millions of unique values,
+Spark will create millions of directories and tiny files.This creates massive metadata overhead,slowing down your storage account and Spark itself.
+
+
+Summary Recommendation
+
+• Use partitionBy only if col0 has a very low number of distinct values (like region or year).
+• Use clusterBy if you are using modern formats (like Delta Lake in Databricks/Spark 3.5+) and col0 has a high number of distinct values,
+or if your data access patterns change over time.
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+ 
+
+ 
+
+
+			
+
+
+
+

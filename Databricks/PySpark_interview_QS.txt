@@ -1,0 +1,659 @@
+Q1. While ingesting customer data from an external source , you notice duplicate entries. How would you remove duplicates and retain only the latest entry based on a timestamp 
+column?
+
+A. data = [("101", "2023-12-01", 100), ("101", "2023-12-02", 150),
+            ("102", "2023-12-01",200), ("102", "2023-12-02", 250)]
+            
+    columns = ["product_id", "date", "sales"]
+    
+    df = spark.createDataFrame(data,columns)
+    df.display()
+    
+#Casting date column from string to date format
+
+#df = df.withColumn('date',col('date').cast(DateType()))
+
+df = df.withColumn('date', to_date(col('date')))
+
+#Drop duplicates -- ascending on product_id, descending on date
+#The provided PySpark code will select the most recent row for each unique product_id, 
+#assuming your date column is formatted in a way that sorts chronologically (like YYYY-MM-DD or a timestamp).
+
+#Here is a breakdown of exactly how it works:
+#1. orderBy('product_id', 'date', ascending=[1, 0]): This sorts your DataFrame first by product_id in ascending order (1), 
+#and then by date in descending order (0, meaning newest dates come first).
+#2. dropDuplicates(subset=['product_id']): PySpark's dropDuplicates keeps the first row it encounters for each unique combination in the subset.
+#Because you just sorted the newest dates to the top, the first row kept for each product_id will be its most recent record.
+
+
+df = df.orderBy('product_id','date',ascending = [1,0]).dropDuplicates(subset=['product_id'])
+df.display()
+
+#Note :- While this logic works perfectly in pandas, dropDuplicates in PySpark does not guarantee order preservation after a sort unless a global partition shuffle forces it, 
+#because PySpark operates on distributed data partitions.To make this operation 100% robust and safe in production, you should use Window functions instead:
+
+from pyspark.sql import Window
+from pyspark.sql.functions import *
+
+# 1. Define the window partitioned by product and sorted by date descending
+window_spec = Window.partitionBy("product_id").orderBy(col("date").desc())
+
+# 2. Filter for the first row in each partition
+df_latest = df.withColumn("row_num",row_number().over(window_spec)) \
+              .filter(col("row_num") == 1) \
+              .drop("row_num")
+
+df_latest.display()
+
+Q2. While processing data from multiple files with inconsistent schemas , you need to merge them into a single DataFrame. How would you handle this inconsistency in PySpark?
+A. df = spark.read.format('parquet')\
+                 .option('mergeSchema', True)\
+                 .load('File/Data/Datafiles')
+                 
+Q3. What are the key differences between Spark and Hadoop MapReduce in terms of performance and scalability?
+A. Spark vs. Hadoop MapReduce: performance and scalability
+Performance
+
+In-memory vs. disk-based execution:
+MapReduce writes intermediate results to disk (HDFS) after every map and reduce stage. 
+Spark keeps intermediate data in memory where possible and spills to disk only when needed. 
+For iterative workloads (ML, graph algorithms) and multi-stage pipelines, Spark is often 10-100x faster in memory and still meaningfully faster on disk, 
+thanks to fewer materialization points.
+
+DAG execution vs. rigid two-stage model
+MapReduce forces every job into map → shuffle → reduce, and complex logic means chaining multiple jobs, each with its own read/write cycle. 
+Spark builds a DAG of the whole computation, pipelines narrow transformations within a stage, and optimizes across the entire plan. 
+With Spark SQL and DataFrames, the Catalyst optimizer (predicate pushdown, column pruning, join reordering) and Tungsten (off-heap memory, whole-stage code generation) 
+add further gains. Adaptive Query Execution can then tune shuffle partitions, join strategies, and skew at runtime.
+
+Task and startup overhead
+MapReduce launches a new JVM per task, which adds latency. Spark reuses long-lived executors, so tasks start in milliseconds, 
+which matters for interactive and short-running queries.
+
+Latency and workload types
+MapReduce is batch-only. Spark covers batch, interactive SQL, streaming (Structured Streaming), ML (MLlib), and graph processing in one engine, 
+avoiding data movement between separate systems.
+
+Scalability
+Aspect	                                                   MapReduce	                                                         Spark
+Horizontal scaling	                            Proven to thousands of nodes.	                                        Also scales to thousands of nodes.
+Fault tolerance	                        Re-run failed tasks; intermediate data is on disk	                     Recompute lost partitions via RDD lineage;
+                                                                                                                     checkpointing for long lineages
+Data larger than memory	                    Naturally handled (disk-based)	                               Handled via spill to disk, but needs tuning to avoid OOM and GC pressure
+Resource management	                                      YARN	                                                     YARN, Kubernetes, Mesos, standalone
+Storage coupling	                                Tightly tied to HDFS	                               Storage-agnostic (HDFS, S3, ADLS, GCS, Delta/Iceberg tables)
+                 
+Q4. You are working with a real-time data pipeline, and you notice missing values in your streaming data Column - Category.
+How would you handle null or missing values in such a scenario?
+
+df_stream = spark.readStream.schema("id INT, value STRING").csv("path/to/stream")
+
+A. df = df.fillNa({'Category': 'NaN'})
+
+Q5. You need to calculate the total number of actions performed by users in a system. How would you calculate the top 5 most active users based on this information?
+A. data = [("user1",5), ("user2",8), ("user3", 2),("user4",10), ("user2",3)]
+columns = ["user_id", "actions"]
+
+df = spark.createDataFrame(data,columns)
+df.display() 
+
+df = df.groupBy("user_id").agg(sum("actions").alias("total_actions"))\
+                        .orderBy("total_actions",ascending=False).limit(5)
+
+df.display()
+
+Q6.While processing sales transaction data, you need to identify the most recent transaction for each customer. How would approach this task?
+A. data = [("cust1","2023-12-01",100),("cust2","2023-12-02",150),
+        ("cust1","2023-12-03",200),("cust2","2023-12-04",250)]
+
+columns = ["customer_id","transaction_date","sales"]
+
+df = spark.createDataFrame(data,columns)
+df.display()
+df.printSchema()
+
+df = df.withColumn("transaction_date", col("transaction_date").cast(DateType()))
+
+window_spec = Window.partitionBy('customer_id').orderBy(col('transaction_date').desc())
+
+df = df.withColumn('flag',dense_rank().over(window_spec)).filter(col('flag')==1)
+df.display()
+
+Q7. You need to identify customers who haven't made any purchases in the last 30 days. How would you filter such customers?
+
+A.data = [("cust1","2026-09-25"),("cust2","2026-09-06"),("cust3","2025-09-25")]
+columns = ["customer_id","last_purchase_date"]
+
+df = spark.createDataFrame(data,columns)
+
+df.display()
+
+
+df = df.withColumn('last_purchase_date',to_date('last_purchase_date'))
+
+df = df.withColumn('gap', datediff(current_date(),'last_purchase_date')).filter(col('gap')>30)
+
+df.display()
+
+Q8.Q8. While analyzing customer reviews, you need to identify the most frequently used words in the feedback. How would you implement this?
+A. 
+data = [("customer1","The product is great"),("customer2","Great product, fast delivery"),("customer3","Not bad could be better")]
+
+columns = ["customer_id", "feedback"]
+
+df = spark.createDataFrame(data,columns)
+
+df.display()
+
+
+
+df = df.withColumn('feedback', lower('feedback')).withColumn('feedback', explode(split('feedback',' ')))
+df_grp = df.groupBy('feedback').agg(count('feedback').alias('wordcount'))\
+        .orderBy('wordcount',ascending=False)
+
+df_grp.display()
+
+
+
+Code Breakdown
+
+• lower('feedback'): Converts all characters in the feedback column to lowercase so that words like "Excellent" and "excellent" are counted together.
+• split('feedback', ' '): Splits the string into an array of words using a space as the delimiter.
+• explode(...): Takes the array of words and outputs each word as a new row, multiplying the row count of your DataFrame.
+• groupBy('feedback').agg(count('feedback').alias('wordcount')): Groups the identical words together and counts how many times each word appears.
+• .orderBy('wordcount', ascending=False): Sorts the final list so the most frequent words appear at the top.
+• .display(): Renders the final DataFrame as a visual table (commonly used in Databricks).
+
+Q9. You need to calculate the cumulative sum of sales over time for each product.How would you approach this?
+A.
+data = [("product1","2023-12-01",100),("product2","2023-12-02",200),
+        ("product1","2023-12-03",150),("product2","2023-12-04",250)]
+
+columns = ["product_id","date","sales"]
+df = spark.createDataFrame(data,columns)
+df.display()
+
+df = df.withColumn('date',to_date('date'))
+window_spec= Window.partitionBy('product_id').orderBy('date')
+df_cum = df.withColumn('sales_cum',sum('sales').over(window_spec))
+df_cum.display()
+
+Q10. While preparing a data pipeline you notice some duplicate rows in a dataset. How would you remove the duplicates without affecting the original order?
+A.
+data = [("John",25),("Jane",30),("John",25),("Alice",22)]
+columns = ["name","age"]
+
+df = spark.createDataFrame(data,columns)
+df.display()
+
+window_spec= Window.partitionBy('name').orderBy('age')
+df = df.withColumn('rowflag',row_number().over(window_spec)).filter(col('rowflag')==1)
+df.display()
+
+
+Q11. You are working with user activity data and need to calculate the average session duration per user. How would you implement this?
+A.
+
+data = [("user1","2023-12-01",50), ("user1","2023-12-02",60),
+         ("user2","2023-12-01",45), ("user2","2023-12-03",75)]
+         
+columns = ["user_id", "session_date", "duration"]
+
+df= spark.createDataFrame(data,columns)
+
+df.display()
+
+from pyspark.sql.functions import *
+df= df.groupBy("user_id").agg(avg("duration").alias('avg_duration'))
+df.display()
+
+Q12. While analyzing sales data, you need to find the product with the highest sales for each month. How would you accomplish this ?
+A. 
+data = [("product1","2023-12-01",100), ("product2","2023-11-01",150),
+         ("product1","2023-11-02",200), ("product2","2023-12-02",250)]
+         
+columns = ["product_id", "date", "sales"]
+
+df= spark.createDataFrame(data,columns)
+df.display()
+
+from pyspark.sql.functions import *
+from pyspark.sql.window import Window
+df = df.withColumn('date', to_date('date'))
+
+#df = df.withColumn('date',month('date')).groupBy('date','product_id').agg(sum('sales').alias('sales'))
+
+window_spec = Window.partitionBy('product_id').orderBy(col('sales').desc())
+df = df.withColumn('ranking', dense_rank().over(window_spec)).filter(col('ranking')==1)
+
+df.display()
+
+Q13. What is the role of SparkContext in PySpark?
+A. SparkContext is the foundational entry point for Spark Core functionality and represents the connection between your driver application and the Apache Spark cluster.
+Historically, before Spark 2.0, it was the absolute main entry point required to execute any Spark job. In modern PySpark (Spark 2.x and later), 
+it has been wrapped into the higher-level SparkSession, but it remains the low-level engine that handles cluster communications and distributed resource coordination.
+A SparkContext represents the connection to a Spark cluster, and can be used to create RDD and broadcast variables on that cluster.
+
+# SparkContext is not available on serverless compute in Databricks.
+
+from pyspark.sql import SparkSession
+
+# Create a SparkSession
+spark = SparkSession.builder.appName("MyApp").getOrCreate()
+
+# Access the underlying SparkContext
+sc = spark.sparkContext
+
+Q14. You are working with a large Delta table that is frequently updated by multiple users. The data is stored in partitions, and sometimes updates can cause inconsistent data 
+reads due to concurrent transactions . How would you ensure ACID compliance and avoid data corruption in PySpark ?
+
+A. 
+# New data 
+    
+df = spark.read.format('parquet').load('path')
+
+from delta.tables import DeltaTable 
+
+delta_tbl = DeltaTable.forPath('path')
+
+delta_tbl.alias('trg').merge(df.alias('src'),"src.id == trg.id")\
+                                  .whenNotMatchedInsertAll()\
+                                  .whenMatchedUpdateAll()\
+                                  .execute()
+                                  
+ 
+While Databricks automatically uses the Delta format under the hood when you use standard PySpark commands (like spark.read or df.write), 
+the DeltaTable class provides a specialized Python API required to perform advanced, Delta-specific operations programmatically.
+
+Standard PySpark DataFrames are fundamentally immutable; you cannot easily say "update only the rows where ID = 5" using pure DataFrame syntax. 
+The DeltaTable class provides the wrapper required to modify existing Delta files on disk using Python.
+
+Q15. You are reading a CSV file and need to handle corrupt records gracefully by skipping them. How would you configure this in PySpark?
+A.
+
+df = spark.read.format("csv")\
+               .option("mode", "DROPMALFORMED")\
+               .load("staging location")
+               
+Q16. What is the difference between RDDs, Dataframe and Dataset?
+A. RDDs (Resilient Distributed Datasets) are low-level, unformatted collections of objects, DataFrames are untyped tabular collections with named columns, 
+and Datasets are strongly-typed extensions of DataFrames that combine object-oriented safety with relational optimizations.
+
+
+Core Differences
+
+
+Feature	   |    RDD (Resilient Distributed Dataset)	  |     DataFrame	           |                    Dataset
+---------------------------------------------------------------------------------------------------------------------------------------------
+Level of   |                                          |                            |
+Abstraction|	          Low-level API	              |    High-level API	       |                   High-level API (extension of DataFrame)
+----------------------------------------------------------------------------------------------------------------------------------------------
+Data Representation| Unstructured or                  |
+                   | structured objects	              |Tabular format with          |
+                                                      | named columns (Row-based)   |                 Strongly-typed JVM objects (Scala/Java classes)
+-----------------------------------------------------------------------------------------------------------------------------------------------------                                                      
+Optimization Engine|	None                          |                             |
+                   |(manual tuning required)	      |Catalyst Optimizer 
+                                                      |& Tungsten execution engine	|                Catalyst Optimizer & Tungsten execution engine
+---------------------------------------------------------------------------------------------------------------------------------------------------                                                     
+Type Safety    	|   Compile-time type safe	|   Run-time type safety only (untyped)	|                 Compile-time type safe
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Language Support|	Scala, Java, Python, R	|      Scala, Java, Python, R	        |                 Scala and Java only
+Serialization/  |
+Memory	        |  On-heap JVM serialization| 
+                   (higher GC overhead)	    |       Off-heap Tungsten binary format |             Off-heap memory with custom encoders
+                                                       (avoids full GC)             |
+------------------------------------------------------------------------------------------------------------------------------------------------                                                       
+    
+Q16. What is the Query Optimization ?
+A.
+Query Optimization in Spark is the process by which Apache Spark transforms a user’s high-level code (written in SQL, Python, Scala, or R) into the most efficient, 
+low-level physical execution plan.
+Instead of executing your code exactly as written, Spark acts like a relational database compiler. It evaluates the structure of your data and your target transformations 
+to eliminate redundant steps, minimize expensive data shuffling across the network, and maximize cluster performance.
+
+
+The Architecture: How Spark Optimizes Queries
+
+Spark performs this magic using an extensible framework called the Catalyst Optimizer, operating through a structured, multi-stage pipeline:
+    
+                                                     Logical plan             Physical plan
+ [ Your Code ] ➔ 1. Parsing ➔ 2. Analysis ➔ 3. Logical Optimization ➔ 4. Physical Planning ➔ 5. Code Generation (Tungsten)
+ 
+ 1. Parsing: Spark passes your query through a parser to check basic syntax, turning it into an Unresolved Logical Plan (an Abstract Syntax Tree or AST). 
+ At this stage, Spark knows what you want to do, but doesn't know if the tables or columns actually exist yet.
+ 
+2. Analysis: Spark consults its internal dictionary (the Catalog) to validate the names of tables, dataframes, and columns, as well as data types.
+Once everything is matched and validated, it becomes an Analyzed Logical Plan.
+
+3. Logical Optimization: The Catalyst Optimizer applies a set of rule-based rewrites to streamline the operations.
+It rearranges the query components to produce an Optimized Logical Plan.
+
+4.Physical Planning: Spark converts the logical plan into one or more possible Physical Plans (which dictate the exact distributed cluster operations,
+like choosing between a SortMergeJoin or a BroadcastHashJoin). It then uses a Cost-Based Optimizer (CBO) to calculate which plan consumes the least CPU, memory,
+and network resources, selecting the absolute winner for execution.
+
+5. Code Generation: Finally, the Tungsten Execution Engine compiles the chosen physical plan into highly optimized Java bytecode (Whole-Stage Code Generation) 
+to run natively and swiftly on your cluster workers.
+
+
+Core Optimization Techniques Applied by Catalyst
+
+When modifying the logical plan, Spark automatically applies several classic relational data optimization rules:
+   i) Predicate Pushdown (Filter Pushdown): Spark pushes your WHERE or filter() clauses down as close to the data source as possible.
+    If you have a billion rows but only want data where country = 'US', Spark filters the rows during the initial read step rather 
+    than pulling a billion records into memory first.
+    
+   ii) Projection Pruning (Column Pruning): Spark identifies which columns are actually used in your final output. 
+   If your table has 100 columns but you only select 3, Spark ignores the other 97, sharply cutting down memory consumption 
+   and network load (especially effective when reading columnar formats like Parquet) 
+   
+   iii) Constant Folding: Spark evaluates expressions containing constant values at compile time rather than computing them for every single row. 
+   For instance, an expression like 1 + 2 is simplified immediately to 3.
+   
+   
+Modern Runtime Enhancements
+
+Static optimization cannot predict everything. Because data sizes change mid-job, modern versions of Spark incorporate two powerful dynamic layers:
+    
+      i) Adaptive Query Execution (AQE): Enabled by default, AQE looks at the actual metrics collected during query runtime and re-optimizes the physical plan on the fly.
+       It automatically collapses small partitions to avoid overhead, automatically converts massive shuffle joins into rapid broadcast joins if the intermediate data 
+       is small enough, and balances out skewed partitions.
+       
+      ii) Dynamic Partition Pruning (DPP): When you are joining a large fact table with a small dimension table, DPP allows Spark to bypass reading irrelevant 
+      partitions from the large table by executing the dimension table's filters at runtime.
+      
+ 
+ Q17. Tell us about Spark session?
+ 
+ Q18. Differences between Wide Transformations and Narrow Transformations ?
+ A. In wide transformations there is shuffling of data across the nodes in a cluster whereas in narrow transformations there is no shuffling of data.
+ 
+                                                               NARROW
+ 
+ |-----------|
+ | 1,2,3,5,9 |     .FILTER(ID>3)                            |--------------|
+ |---------- |                                              |   5,9        |
+                                                            |--------------|
+ |-----------|
+ |3,6,7      |                                              |--------------|
+ |-----------|                                              |  6,7         |
+                                                            |--------------|
+                                                            
+                                                           WIDE
+                                                           
+ |------------|
+ | 1,2,3,4,1  |
+ |            |      .groupBy ID
+ |------------|
+ 
+ |------------|
+ | 1,2,6,7    |
+ |------------|
+ 
+ 
+ Q19. What is the use of COALESCE() and REPARTITION() ?
+ A. It's always better to read from a few optimized , bigger sized partitions than from multiple smaller sized partitions .
+ COALESCE()is used to always reduce the number of partitions . It doesn't require shuffling.
+ 
+ REPARTITION() can be used to increase or decrease the number of partitions.
+ So if we have two very big partitions and we want to redistribute the data across multiple partitions and nodes we can use the REPARTITION.
+ It requires shuffling.
+ 
+ Q20. When to use CACHE() and PERSIST()? What's the difference?
+ A. So if we have a DataFrame that we need to use again and again , we can store it in memory and disk.
+ 
+ df.cache is the same as df.persist(StorageLevel.MEMORY_AND_DISK)
+ 
+ MEMORY_ONLY, DISK_ONLY, MEMORY_AND_DISK, MEMORY_AND_DISK_SERIALIZED all options are available if we want to store our intermediate results and all 
+ these can be accessed or used with the PERSIST() , df.persist(). 
+ 
+ So df.persist(StorageLevel.MEMORY_AND_DISK) means that it will first try to store the intermediate results into the memory and if the dataframe is really big
+ then it will write some portion of it in the disk.
+ 
+ Q21. You have a dataset containing the names of employees and their departments . You need to find the department with the most employees.
+ A. 
+ data = [("Alice", "HR"), ("Bob", "Finance"), ("Charlie", "HR"), ("David", "Engineering"), ("Eve", "Finance")]
+ columns = ["employee_name", "department"]
+ 
+ df = spark.createDataFrame(data,columns)
+ df.display()
+ 
+ df = df.groupBy('department').agg(count('employee_name').alias('total_employees')).sort('total_employees', ascending = False)
+ 
+ df.display()
+ 
+ Q22. While processing sales data, you need to classify each transaction as either 'High' or 'Low' based on it's amount. How would you achieve this using a when condition?
+ A.
+ data = [("product1",100),("product2",300),("product3",50)]
+ columns = ["product_id", "sales"]
+ 
+ df = spark.createDataFrame(data,columns)
+ df.display()
+ 
+ from pyspark.sql.functions import *
+df = df.withColumn("price_cat", when(col('sales')>50,"High").otherwise("Low"))
+df.display()
+
+Q23. While analyzing a large dataset you need to create a new column that holds a timestamp of when the record was processed. 
+How would you implement this and what can be the best use case ?
+A.
+data = [("product1",100),("product2",200),("product3",300)]
+ columns = ["product_id", "sales"]
+ 
+ df = spark.createDataFrame(data,columns)
+ df.display()
+ 
+ df = df.withColumn("processed_time",current_timestamp())
+df.display()
+
+Best use case will be while working with Slowly Changing Dimensions.
+
+Q24. You need to register this PySpark DataFrame as a temporary SQL object and run a query on it(FROM DIFFERENT NOTEBOOKS AS WELL)?
+A. 
+data = [("product1",100),("product2",200),("product3",300)]
+ columns = ["product_id", "sales"]
+ 
+ df = spark.createDataFrame(data,columns)
+ df.display()
+ 
+## Not supported on serverless compute.
+
+df.createOrReplaceGlobalTempView("globalview")
+
+%sql
+SELECT * FROM global_temp.globalview;
+
+A GlobalTemp View can be accessed by different notebooks attached to the current cluster. It will be reset when the cluster is terminated. 
+
+Q25. You need to query data from a PySpark DataFrame using SQL, but the data includes a nested structure. How would you flatten the data for easier querying?
+A.
+data=[("product1",{"price": 100, "quantity":2}),
+          ("product2",{"price": 200, "quantity":3})]
+          
+columns = ["product_id", "product_info"]
+
+df = spark.createDataFrame(data,columns)
+df.display()
+
+1st method: df.select("product_id","product_info.price","product_info.quantity").display()
+
+2nd method: df.select("product_id","product_info.price","product_info.quantity").createOrReplaceTempView("flatview")
+
+%sql
+SELECT  * from flatview;
+
+Q26. You are working with a large dataset in Parquet format and need to ensure that the data is written in an optimized manner with proper compression.
+How would you accomplish this ?
+
+A. df.write.format("parquet").option("compression","snappy") 
+
+Q31. Your company uses a large-scale data pipeline that reads from Delta tables and processes data using complex aggregations.
+However, performance is becoming an issue due to the growing dataset size. How would you optimize the performance of the pipeline?
+
+A.
+%sql
+OPTIMIZE tabledelta ZORDER BY('order_date')
+
+So suppose there are 6 partitions , and 'OPTIMIZE' will reduce the number to 2 partitions. All the data will be compressed into these two partitions(bin-packing or 
+data compaction) , plus 'ZORDER BY' will sort the data in either ascending or descending manner within these 2 partitions.
+
+Spark will get the statistics from the transaction logs.(We get column statistics for the first 32 columns)
+
+P1
+|-------------      min & max value --> 1   &    5
+| 1,2,3,4,5  |
+|------------|
+
+P2
+|-----------|
+|6,7,8,9,10 |       min & max value ----> 6 & 10
+|-----------|
+
+So if we are using a query 'select * from tabledelta where ID <= 5;' 
+
+If we had not used the 'ZORDER BY' command, data read would have been from both the partitions. But since Spark has the statistics for the minimum and maximum value it will 
+read the data from partition 1 and skip partition 2(data skipping).
+
+Q27. You are processing sales data. Group by product categories and create a list of all product names in each category?
+A.
+
+data = [("Electronics","Laptop"),("Electronics","Smartphone"),("Furniture","chair"),("Furniture","Table")]
+columns = ["category","product"]
+
+df = spark.createDataFrame(data,columns)
+df.display()
+ 
+from pyspark.sql.functions import *
+df = df.groupBy('category').agg(collect_list('product').alias('products'))
+df.display()
+
+collect_list('product') collects all product names within that category into a single Python-like list (array).
+Note: collect_list retains duplicates and does not guarantee a specific order.
+
+If you want to eliminate duplicate products within each category, use collect_set instead of collect_list:
+df = df.groupBy('category').agg(collect_set('product').alias('products'))
+df.display()
+
+Q28. You are analyzing orders. Group by customer IDs and list all unique product IDs each customer purchased.
+
+data=[(101,'P001'),(101,'P002'),(102,'P001'),(101,'P001')]
+columns = ["customer_id","product_id"]
+
+df= spark.createDataFrame(data,columns)
+df.display()
+
+df = df.groupBy('customer_id').agg(collect_set('product_id').alias('unique_products'))
+df.display()
+
+Q29.For customer records, combine first and last names only if the email address exists.
+A.
+data=[("John","Doe","john.doe@example.com"),("Jane","Smith",None)]
+columns=['First_name','Last_name','Email']
+
+df=spark.createDataFrame(data,columns)
+df.display()
+
+from pyspark.sql.functions import *
+df = df.withColumn("Fullname",when(col("Email").isNotNull(),concat_ws("-",col("First_name"),col("Last_name"))).otherwise(lit(None)))
+
+df.display()
+
+Q30. You have a DataFrame containing customer IDs and a list of their purchased product IDs.Calculate the number of products each customer has purchased.
+A.
+data=[(1,["prod1","prod2","prod3"]),
+      (2,["prod4"]),
+     (3,["prod5","prod6"])]
+
+myschema="customer_id INT, product_ids array<STRING>"
+myschema=["customer_id", "product_ids"]
+
+df=spark.createDataFrame(data,myschema)
+df.display()
+
+df=df.withColumn("number_of_products",size(col('product_ids')))
+df.display()
+
+Q31.You have employee IDs of varying lengths. Ensure all IDs are 6 characters long by padding with leading zeroes.
+A.
+data=[
+    ("1",),
+    ("123",),
+    ("4567",)
+]
+schema = ["employee_id"]
+df= spark.createDataFrame(data,schema)
+df.display()
+
+from pyspark.sql.functions import *
+df=df.withColumn("employee_id", lpad(col("employee_id"),6,"0"))
+df.display()
+
+Q32.You need to validate phone numbers by checking if they start with "91".
+A.
+data=[('911234567890',),
+      ('811234567890',),
+      ('912345678901',)]
+
+schema=["phone_number"]
+df=spark.createDataFrame(data,schema)
+df.display()
+
+from pyspark.sql.functions import *
+df.filter(substring(col("phone_number"),1,2)=="91").display()
+
+Q33. You have a dataset with courses taken by students. Calculate the average number of courses per student.
+A.
+data = [
+    (1,["Math","Science"]),
+     (2,["History"]),
+     (3,["Art","PE","Biology"])
+]
+
+schema= ["student_id","courses"]
+
+df= spark.createDataFrame(data,schema)
+df.display()
+
+df=df.withColumn("course_size",size("courses")).groupBy().agg(avg("course_size").alias("average_count"))
+df.display()
+
+Q34.You have a dataset with primary and secondary contact numbers. Use the primary number if available; otherwise use the secondary number.
+
+A.
+data=[
+    (None,"1234567890"),
+    ("9876543210",None),
+    ("7894561230","4567891230")
+]
+
+schema=["primary_contact","secondary_contact"]
+
+df= spark.createDataFrame(data,schema)
+df.display()
+
+df=df.withColumn("contact",coalesce(col('primary_contact'),col('secondary_contact')))
+df.display()
+
+Q35.You are categorizing product codes based on their lengths. If the length is 5, label it as "Standard"; otherwise label it as "Custom".
+A.
+data=[
+    ("prod1",),
+    ("prd234",),
+    ("pr9876",),
+]
+
+schema=["product_code"]
+df=spark.createDataFrame(data,schema)
+df.display()
+
+df=df.withColumn('Code_Flag',when(length(col("product_code"))==5, "Standard").otherwise("Custom"))
+df.display()
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
