@@ -1,0 +1,97 @@
+Read file                                                    Map Step                             Shuffle & Sort                     Reduce
+ 
+--------------|       |--------------------|                 |("Hello",1)    |                  |("Hello",1,1,1) |                  |("Hello",3)   |
+Hello World   |=====> |"Hello", "World"    |                 |("World",1)    |                  |("world",1)     |                  |("World",1)   |
+Hello Spark   |       | "Hello", "Spark"   |===============> |("Hello",1)    |==============>   |("Spark",1)     |================> |("Spark",1)   |
+Hello MapReduce|      | "Hello", "MapReduce"|                 |("Spark",1)    |                  |("MapReduce",1) |                  |("MapReduce",1)|
+---------------       ----------------------                 |("Hello",1)    |                  |----------------|                  ----------------  
+                                                             |("MapReduce",1)|                          |                                 |
+															 |---------------|                          |                                 |
+															       |                                    |                                 |
+																   | (result is written to disk)          |                                 |
+																   |                                   DISK                              DISK
+																  DISK                           (result written to disk)            (result written to disk)
+																   
+A) Lines are split into words.
+B) It converts each line into (key,value) pairs.
+
+
+Spark introduced in-memory processing(data caching).Processing done in distributed manner across the cluster.
+Cluster Manager is responsible for managing the entire pool of CPUs and RAMs available.(YARN, Kubernetes)
+In order to start the spark application,user will have to run the 'spark-submit' command along with the code,job configuration,etc. This request goes to YARN.
+YARN will create the first container , i.e. application master, it will select any of the worker nodes at random and create a application master.
+A container is a secured environment with fixed amount of resources(RAM, CPU). Not allowed to access or borrow from any of the external resources.
+Application Master container will be located in one of the worker nodes.The purpose of the application driver is to execute the main method of our Spark application.
+A PySpark driver will spin up and call its own main() method(since it is not written in JAVA/Scala), which will call the main() method of the Spark application.
+Spark core is written in Scala.
+
+|--------------------------------------------------------------
+|       Application Master Container                          | 
+|                                                             |
+|  PySpark                             JVM                    |
+|   main()  ----------------------->   main()                 |
+|(PySpark Driver)                     (Application Driver)    |
+--------------------------------------------------------------|
+
+Spark(Scala) ---> Java Wrapper ----> Python Wrapper
+
+Spark driver goes to YARN and requests resources with 3 executors and each of these executors should have 30GB RAM and 4 cores.
+Resource manager will create Executor containers in Worker nodes 1,2 and 4.(Eg.) and hands over the details to the application driver.
+Application driver then schedules the tasks across the workers. Executors execute the tasks and report the results back to the driver.
+Each executor has a JVM process each but if we write UDFs it will also spin up a Python process. (use libraries or codes not native to Spark/Scala/Java).
+User submits a request to the resource manager. Resource Manager then starts the Application Master Container which then starts the Application Driver Process.
+
+Cluster mode -  The mode where the Application Driver runs in one of the executors/nodes in the cluster is called the Cluster Mode.
+Client Mode - When we run the Spark-submit , the command starts the Application Driver on the user or the client machine itself(not routed to resource manager).
+The Application Driver will then co-ordinate with the YARN resource manager for the allocation of resources, creation of executor containers, etc.
+
+In a Narrow transformation each output partition depends on a single input partition. No shuffle involved.
+In a Wide transformation shuffle is involved.
+
+In Shuffle data is distributed/redistributed across the partitions. So data with the same keys land in the same partition.
+Rule : key % x , so if there are 3 partitions , it will be key%3 will give 0,1,2 , that will decide which partition the key will go in 0--> partition0,1--> partition1, etc.  
+If the key is "Hello" --> hash(Hello)% 3 --> hash(Hello) will be converted to int , int % 3 = 0,1,2 . So all the "hello"s will land in the same partition because the hash 
+function is going to give the same value for all the "hello"s. 
+
+Filter or predicate pushdown-> filter(city=Boston),it is executed directly at data source without having to bring back the data to the executors and then doing filtering.
+Projection/ column pushdown -> Reduces the number of columns that need to read from the data source by selecting only those columns that are specified in the query.
+
+
+The DAG scheduler creates a job. It takes up the final, selected physical plan and converts it into a DAG of stages and tasks and finally executes it on the cluster.
+
+Whenever a action is called , eg.'.collect()', Spark will create a job where all the narrow and the 
+wide transformatios are going to be executed in a sequence to produce the final output.
+
+Stages are created at the boundary of a shuffle. So if we have n shuffles/ wide transformations we are going to have n + 1 stages . So in this case we will have 3 stages.
+
+1) |spark.read| -> Narrow transformation
+
+2) |.filter|    -> Narrow transformation
+
+3) |.repartition| -> Wide transformation  ======> Stage 1
+
+4) |.select|     ->  Narrow transformation
+
+5) |.withColumn| -> Narrow transformation
+
+6) |.groupBy|   ->  Wide transformation  ======> Stage 2
+
+7) |.sum|      ->  Narrow transformation
+
+8) |.withColumn| -> Narrow transformation  ======> Stage 3
+
+9) .collect()   -> Action                
+
+
+So for eg:, if there are 3 partitions , the 'select' transformation is going to be applied on all the three partitions. 
+So if there are N partitions there are going to be N parallel tasks. So 3 partitions are going to be executed by 3 parallel tasks.
+
+One partition to be processed by one task which is executed by one core.
+              
+			     processed                         Executed
+1 partition <----------------------- 1 task <-------------------- 1 core
+
+
+
+
+

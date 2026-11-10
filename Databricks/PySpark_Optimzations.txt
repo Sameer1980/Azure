@@ -1,0 +1,748 @@
+From Google Colab
+Create a notebook 'Spark_optimization'
+--------------------------------------------------------------------------------------
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.master("local[*]")\
+                          .appName("SamirBanerjee")\
+                          .getOrCreate()
+                          
+In Databricks this is already created so no need to create it seperately.
+
+print("=== Spark Session Info ===")
+print(f"Spark Version:        {spark.version}")
+print(f"Session Timezone:      {spark.conf.get('spark.sql.session.timeZone')}")
+print(f"Shuffle Partitions:   {spark.conf.get('spark.sql.shuffle.partitions')}")
+print(f"ANSI Enabled:         {spark.conf.get('spark.sql.ansi.enabled')}")
+print(f"Max Partition Bytes:  {spark.conf.get('spark.sql.files.maxPartitionBytes')}")
+print(f"Execution Timeout (s): {spark.conf.get('spark.databricks.execution.timeout')}")
+print()
+print("Note: On serverless compute (Spark Connect), Spark UI URL,")
+print("App Name, Master, Deploy Mode, and driver/executor memory")
+print("are not exposed. Switch to Dedicated access mode to access")
+print("spark.sparkContext and these JVM-level properties.")
+
+Catalog - spark_optimizations
+Schema - raw_data 
+Volumes - sourcefiles
+
+Within source files -> '/Volumes/spark_optimzations/raw_data/sourcefiles/BigMartSales.csv' 
+
+A.SCANNING OPTIMIZATION
+-----------------------------------------------------
+Eg: Select * from tbl where id < 2 (produces one or two rows)
+
+Spark doesn't know which data (to satisfy the above query result) is in which partition? so it will scan all files which may number in millions (for eg:) 
+
+So it order to mitigate this we have something called as partition pruning which helps to optimize the scanning.
+
+The below parameter helps to set the AQE on or off:
+
+spark.conf.set("spark.sql.adaptive.enabled", "false") # available only in dedicated cluster mode .
+To check -> spark.conf.get("spark.sql.adaptive.enabled")
+
+Data Reading:
+=======================
+
+df = spark.read.format("csv")\
+            .option("inferschema", True)\
+            .option("header", True)\
+            .load("/Volumes/spark_optimzations/raw_data/sourcefiles/BigMartSales.csv")    
+            
+Sparks creates logical partitions on top of data . Even if I have only file. It will create partitions or chunks on the dataset.
+Spark creates partitions of 128 MB in size(default) so if our file size is less than that it will create only 1 partition. 
+
+df.rdd.getNumPartitions() -- Not available in Serverless Compute (Spark Connect)
+
+df.select(spark_partition_id().alias("partition_id")).distinct().count()
+
+This uses the DataFrame API's spark_partition_id() function (already imported in Cell 6) to identify partitions and count 
+the distinct ones — achieving the same result without the unsupported .rdd accessor.
+The cell executed successfully and returned 1 partition, meaning the CSV file was read as a single partition.
+
+#Changing the default partition size to 128KB
+
+spark.conf.set("spark.sql.files.maxPartitionBytes",131072)
+
+a) Again run the Data Reading:
+ df = spark.read.format("csv")\
+            .option("inferschema", True)\
+            .option("header", True)\
+            .load("/Volumes/spark_optimzations/raw_data/sourcefiles/BigMartSales.csv") 
+            
+ 
+b) spark.conf.set("spark.sql.files.maxPartitionBytes",131072)
+
+c) df.rdd.getNumPartitions() -- It will show 7 partitions (850KB / 128KB) . It will show 7 partitions for 1 file.
+
+d) Change the default partition size to 128MB
+-------------------------------------------------------------------------------------------------
+
+Again follow the above steps :
+a) Run the data read.
+b) spark.conf.set("spark.sql.files.maxPartitionBytes",134217728)
+c) df.rdd.getNumPartitions()
+
+Repartitioning                     --> It will  create partitions of equal size.
+-----------------------------
+df = df.repartition(10)
+df.rdd.getNumPartitions()
+
+1 file is converted into 10 logical partitions. We need to increase the number of partitions to increase parallelism. There are multiple executors. Each executor has 
+multiple cores.So if a executor has 4 cores it can perform 4 tasks all at one time parallely. 
+Task is the partition that we give to the executor for execution.
+
+Get partition info:
+------------------------------------------
+
+df.withColumn("partition_id", spark_partition_id()).show(8253) # Colab
+df.withColumn("partition_id", spark_partition_id()).display() #Databricks
+
+Data Writing
+----------------------------------------------------------------
+
+df.write.format("parquet")\
+    .mode("append")\
+    .option("path","/Volumes/spark_optimzations/raw_data/rawdata/parquetwrite")\
+    .save()
+    
+ df_new = df_new.filter(col("Outlet_Location_Type") == 'Tier 1')
+df_new.display()
+
+It results in 2388 rows, almost 1/3rd. So Spark should be reading around 4 files but it still reads 10 files.
+
+Scanning Optimization
+------------------------------------------------------------------
+df.write.format("parquet")\
+    .mode("append")\
+    .partitionBy("Outlet_Location_Type")\
+    .option("path","/Volumes/spark_optimzations/raw_data/rawdata/parquetwriteOpt")\
+    .save()
+    
+df_new = spark.read.format("parquet")\
+                   .load("/Volumes/spark_optimzations/raw_data/rawdata/parquetwriteOpt")
+
+df_new= df_new.filter(col("Outlet_Location_Type") == 'Tier 1') # Applied partition pruning. Partitioning columns should have low cardinality and should be used as a predicate in a WHERE clause or JOIN clause. 
+df_new.display()
+
+It returns output as 2388 rows.
+
+Spark does lazy evaluation . It first reads and then applies partition pruning(all transformations) so it doesn't have to display or return the entire dataset when 
+display() (action) is applied.
+
+Joins Optimization
+----------------------------------------------------------------------------
+So if there is one Fact table of one 1 GB size  --> There will be 8 partitions (as per the default 128 MB size rule) 
+There is one Dim table - 1 MB size  --> 1 partition. 
+
+Join is a wide transformations. There are two types of transformations - Narrow and Wide . In narrow there is no shuffling but in wide transformations there is shuffling.
+
+
+How It Works
+
+- No Shuffling: In a standard join, Spark moves (shuffles) rows with matching keys across the network so they sit on the same executor, which is slow and resource-heavy.
+- Copy to All Nodes: A broadcast join sends a complete copy of the smaller DataFrame or table to every worker node (executor) in the cluster.
+- Local Joins: Because every worker holds a local copy of the small table, it can perform the join immediately in its own memory without network data movement.
+- Stays put in partitions: The large table remains distributed across the cluster in its existing data partitions.
+- No network shuffle: Spark does not redistribute, rehash, or sort the large table across the network.
+- Local stream processing: Each worker node takes its local partitions of the large table and performs a hash join against a full, 
+in-memory copy of the small broadcasted table that has been sent to that node.
+- Parallel execution: Because the large table is untouched and stays localized, the join executes much faster by avoiding expensive shuffle I/O operations.
+
+Since AQE is disabled it will create 200 partitions when we join the Fact with the Dim table or perform any wide transformations. 
+In each of the 200 partitions it will put the Dimension key from the Fact and the Dim tables so that they can be joined together.
+So these 200 partitions will be shuffled and will executed on the 4 executors. 
+
+We can avoid these shufflings or avoid creating 200 partitions.Condition is one table should be very large in size and one very small.So small that it can be broadcasted to the Driver node and stored in 
+Executor memory.
+
+The Driver node will load the 1 MB Dim partition into its JVM memory and broadcast it to all the 4 executors.
+All the executors now have the data to perform joins so there is no need for shuffling.
+
+ B. Broadcast Join .
+ #Big Dataframe
+df_transactions = spark.createDataFrame([
+     (1,"US",100),
+     (2,"India",200),
+      (3,"UK",150),
+    (4,"US",80)
+] ,["ID","country_code","amount"])
+
+#Small Dataframe
+df_countries = spark.createDataFrame([
+     ("US","United States"),
+     ("IN","India"),
+      ("UK","United Kingdom")
+], ["country_code","country_name"])
+
+df_join = df_transactions.join(df_countries,df_transactions['country_code']==df_countries['country_code'],"inner")
+df_join.show()
+
+Sort-Merge join , a default join, is being performed where it will create 200 partitions, then apply sorting within each partition and then perform join.
+So 200 partitions are created for 4 and 3 records !! 
+
+It performed broadcast exchange so there was no shuffling on either side.
+So each executor can perform this join using the broadcast table without doing any kind of shuffling.
+
+df_join_opt = df_transactions.join(broadcast(df_countries),df_transactions['country_code']==df_countries['country_code'],"inner")
+df_join_opt.show()
+
+C.SQL Hints -- Create another notebook 'SPARK_SQL_Hints'
+----------------------------------------------------------------------------------
+It's just a advice that we provide to Spark. It may not be accepted all the time .
+
+df_transactions = spark.createDataFrame([
+     (1,"US",100),
+     (2,"IN",200),
+      (3,"UK",150),
+    (4,"US",80)
+] ,["ID","country_code","amount"])
+
+#Small Dataframe
+df_countries = spark.createDataFrame([
+     ("US","United States"),
+     ("IN","India"),
+      ("UK","United Kingdom")
+], ["country_code","country_name"])
+
+df_transactions.createOrReplaceTempView("transactions")
+df_countries.createOrReplaceTempView("countries")
+
+
+df_sql = spark.sql("""select * from transactions t 
+                   join countries c on t.country_code = c.country_code""")
+                   
+
+df_sql_opt = spark.sql("""select  /*broadcast(c)*/
+                       *
+                   from transactions t 
+                   join countries c on t.country_code = c.country_code""")
+df_sql_opt.display()
+
+D.CACHING & PERSISTENCE -- Create another notebook 'CACHING & PERSISTENCE'
+---------------------------------------------------------------------------
+Spark Pool Memory --> Divided into 2 parts |Storage memory|  AND |Execution memory|
+Execution memory is short-  lived memory. It will simply evict a existing dataframe if it wants to accomodate a new dataframe.
+
+So suppose we create multiple dataframes .
+df1 = .csv (read)
+df2 = (transformation 1)
+df3 = (read from df1 and do transformation2)
+df4 = (read from df1 and do transformation3)
+
+When we are creating df2 after df1,it will evict the dataframe (df1) from Execution memory.
+So if we want to refer to df1 again it will recalculate it using DAG.
+Again for df3 & df4 if it is referring to df1 it will recalculate df1 using DAG because df1 is evicted and not stored anywhere in memory.
+
+Long term memory is the Storage memory which is used for caching. So if we are using a dataframe multiple times and if the dataframe is not big in size,
+it is better if we do caching and store it in the Storage memory. So instead of recalculating from DAG it will use the dataframe from storage cache and processing 
+will be much faster.
+
+So for df2 , df3 and df4 , instead of recalculating df1, it will be much faster if the dataframe df1 is read from cache.
+
+df.persist(storageLevel.DISK_AND_MEMORY)  = df.cache()
+
+Two other options -
+- DISK_ONLY
+- MEMORY_ONLY 
+
+a) storageLevel.DISK_AND_MEMORY -> If the caching dataframe is very big and cannot be accomodated inside storage memory. So Spark will try to fit as much partitions as possible
+into the memory and the rest into the disk. 
+
+b) DISK_ONLY --> Cache the data onto disk. Not recommended.
+c) MEMORY_ONLY --> So if our dataframes are very small and can be accomodated inside the storage memory without any issue we can use this option.
+c) MEMORY_AND_DISK_2 --> ) Replicates every cached partition across two separate worker nodes, providing fault tolerance if a machine fails.
+d)MEMORY_ONLY_SER / MEMORY_AND_DISK_SER--> : Serializes the DataFrame into a space-efficient byte stream before caching. 
+This significantly reduces the memory footprint but introduces CPU overhead for serialization and deserialization
+e) To unpersist --> df.uncache()
+
+from pyspark.sql.functions import *
+df = spark.read.format("csv")\
+             .option("inferSchema", True)\
+             .option("header", True)\
+             .load("/Volumes/spark_optimzations/raw_data/sourcefiles/BigMartSales.csv")
+             
+df2 = df.filter(col("Outlet_Location_Type")=='Tier 1')
+
+df3 = df.filter(col("Outlet_Location_Type")=='Tier 2')
+df3.display()
+
+While working with 'df' SPARK will again recompute the dataframe from the DAG while creating 'df2' and 'df3' because it is evicted from the Execution memeory and is not stored 
+anywhere .
+
+df = spark.read.format("csv")\
+             .option("inferSchema", True)\
+             .option("header", True)\
+             .load("/dev/my_folder/BigMartSales.csv")\
+             .cache()
+             
+df2 = df.filter(col("Outlet_Location_Type")=='Tier 1')
+
+df3 = df.filter(col("Outlet_Location_Type")=='Tier 2')
+df3.display()
+
+There will be in-memory table scan as the DF/RDD is loaded(cached) into the storage memory.
+
+df.unpersist() --> If we want to uncache the DF from memory.
+
+from pyspark.storagelevel import StorageLevel
+ 
+df.persist(StorageLevel.MEMORY_ONLY)
+
+E. Dynamic Resource Allocation
+---------------------------------------------------------------------------------------------------------
+Suppose there are 100 cores , 1 driver and 20 Executors . So if a developer is submitting his or her Spark application 'spark-submit' . 
+All those resources will be locked and cannot be used by others until the Spark application gets submitted.
+This is static resource allocation.
+
+spark-submit\
+--conf spark.dynamicAllocation.enabled = true \
+--conf spark.shuffle.service.enabled = true   \
+--conf spark.dynamicAllocation.minExecutors=2\
+--conf spark.dynamicAllocation.initialExecutors=4\
+--conf spark.dynamicAllocation.maxExecutors=10\
+my_spark_job.py
+
+The solution is 'Dynamic Resource Allocation' .
+I will put a demand to the cluster manager that I need 10 executors but I don't want to lock my resources, I want to make them dynamic. 
+So if after a idle time of say 60sec. if my executors are in a idle state and not processing anything they will be released.
+So out of 20 executors 19 are released .
+
+So what if I need 2 more to process my data ? (conf spark.dynamicAllocation.minExecutors=2)
+A) So I will say that I need at least two executors so even after the time window of 60 sec. those two executors will not be released.
+
+B) So if we need more executors we can get but not more than 10.(conf spark.dynamicAllocation.maxExecutors=10)
+
+c) So what if we typically need more executors while starting the Spark application or while reading some data , transformations , pruning and all that 
+we will use the parameter 'conf spark.dynamicAllocation.initialExecutors=4' to start with initially out of which only 2 will remain even after idle time.
+
+F. AQE - Adaptive Query Execution
+-----------------------------------------------------------------------------------------------------------
+-- Dynamically Coalesce the partitions.--> It will automatically coalesce or combine the partitions dynamically based on query statistics. So for eg: if there are 200 partitions it will be reduced to two dynamically.
+-- Optimizing the Join Strategy during runtime.--> 
+
+Logical plan -> Physical plan -> Executors . So now if Spark decides to apply sort-merge join how it can change the join strategy? It will re-examine the plan and will revisit 
+the logical plan. So if we have two big tables and after filter, while submitting the code, the second table size is very small, AQE will re-examine the query during runtime 
+and apply broadcast join instead.
+
+Go to the notebook 'Spark_optimization' . We have two tables.
+--------- 'df_transactions' -> Fact Table -> 1 GB
+--------- 'df_countries' -> Dim Table -> 1 GB 
+
+Intially when we were applying joins both tables were of large size. But after applying filters and pruning the size of the Dim table is just 5 MB.(during runtime).
+AQE will apply broadcast join instead of sort-merge because one table's size got reduced during runtime. So instead of shuffling data it will broadcast the table to each 
+executor's memory and each executor can apply joins without any shuffling.
+
+
+-- Optimizing the skewness.--> 
+So suppose customer ID 1 is taking up a lot of place . This can lead to OOM(Out-of-memory) error.This skewness can be overcome by AQE. 
+It will breakup the partition (P1) into multiple smaller sized partitions.
+
+|----------------------------------------------------------------------------|
+|           P1                                                               | Customer Id 1
+|----------------------------------------------------------------------------|                                                                            
+
+|-----------------
+|      P2        | Customer Id 2 
+|----------------|
+
+|------|
+| P3   |  Customer Id 3
+|------|    
+
+|---|
+|P4 |  Customer Id 4
+|---|   
+
+P5
+-- Customer Id 5
+
+P6
+- Customer Id 6
+
+Create a new notebook 'AQE'.
+
+df = spark.read.format("csv")\
+           .option("inferSchema", True)\
+           .option("header", True)\
+           .load("/dev/my_folder/BigMartSales.csv")
+
+
+df.rdd.getNumPartitions() --> 1 partition
+
+df_new = df.groupBy("Item_fat_content").count()
+
+df_new.rdd.getNumPartitions() --> 200 partitions
+
+Enable AQE.
+spark.conf.set("spark.sql.adaptive.enabled", True)
+
+Verify . spark.conf.get("spark.sql.adaptive.enabled")
+
+a) Re-read the data.
+df = spark.read.format("csv")\
+           .option("inferSchema", True)\
+           .option("header", True)\
+           .load("/dev/my_folder/BigMartSales.csv")
+           
+b) No. of partitions --> still 1
+
+c)df.show()
+
+d)Again do the wide transformation.
+df_new = df.groupBy("Item_fat_content").count()
+
+e)df_new.show()
+
+f) df_new.rdd.getNumPartitions() --> only 1 partition instead of 200 .
+'AQEShuffleRead'
+
+Before AQE .
+
+We had 5 records . In order to groupBy we need to create one partition for each ID("Item_fat_content"). 1 partition for "low fat", 1 partition for "Low Fat", 1 for "LF",
+1 for "Regular", 1 for "reg" . Total 5 partitions. 
+
+Remaining 195 partitions are empty because we do have any keys to populate these partitions.Resources were being wasted by sending these empty partitions to the executors / cores.
+
+After AQE.
+a)First of all remove all empty 195 partitions. 
+b) Coalesce the 5 partitions into 1 partition.
+
+
+G.Dynamic Partition Pruning
+------------------------------------------------------------------------------------
+So we have a partitioned dataframe . Each partition folder contains partition files. Eg: partitionBy("Date") will have folders like '2022' ,
+'2023','2024','2025', '2026' . So partition pruning is basically filtering out the data that is not required based on partition value like date so that all the folders do 
+not get scanned.
+
+We have another dataframe which is not partitioned.We just have only 1 file.
+
+df1.filter("")\
+   .join("")
+   
+We are applying a filter condition on df1 so instead of scanning all the files it will only join those files which actually meet the join criteria.
+
+But if we want to apply filter on df2 and then join to df1.There will be no partition pruning since filter is not applied on df1 and df2 will join df1,on all the available files 
+whether it meets the join criteria or otherwise.
+
+df2.filter("")\
+     .join("")
+     
+This is where Dynamic Partition Pruning comes into the picture.
+It will pass or broadcast the df2 filter to df1 during runtime.It will create a select query on top of the df2 keys and will pass that query as a filter to df1.
+So it doesn't need to read all the partitions. But only those that satisfy the filter conditions.
+
+We can prune partitions even if we do not have filter on one of the dataframes or tables because we can use filter of the other table.
+
+
+
+
+Turning off AQE and DPP and AutoBroadcast
+--------------------------------------------------------------------------------------------------------------------
+
+spark.conf.set("spark.sql.adaptive.enabled", "false")
+spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.enabled","false")
+spark.conf.set("spark.sql.autoBroadcastJoinThreshold",-1)
+
+Preparing the partitioned data 
+--------------------------------------------------------------------------------------------------------------------
+df = spark.read.format("csv")\
+          .option("header", True)\
+          .option("inferSchema", True)\
+          .load("/dev/my_folder/BigMartSales.csv")
+          
+df=df.limit(8)
+
+df.write.format("parquet")\
+        .mode("append")\
+         partitionBy("Outlet_type")\
+        .option("path","/dev/my_folder/dpp_partitioned")\
+        .save()
+
+
+Non-partitioned data 
+----------------------------------------------------------------------------------------------------------------------
+df.write.format("parquet")\
+        .mode("append")\
+        .option("path","/dev/my_folder/dpp_nonpartitioned")\
+        .save()
+
+ 
+Dataframes 
+------------------------------------------------------------------------------------------------------------------------
+df1 = spark.read.format("parquet")\
+          .load("/dev/my_folder/dpp_partitioned")
+          
+df2 = spark.read.format("parquet")\
+          .load("/dev/my_folder/dpp_nonpartitioned")
+          
+Joins
+--------------------------------------------------------------------------------------------------------------------------
+df_join= df1.join(df2.filter(col("Outlet_type")=="Grocery Store"),df1["Item_Identifier"]==df2["Item_Identifier"],"inner")
+
+df_join.show()
+
+Apply Dynamic Partition Pruning
+---------------------------------------------------------------------------------------------------------------------------
+spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.enabled","true")
+
+Re-run all the codes :
+ 1) df1
+ 2) df2 
+ 3) Joins
+ 
+So whenever we want to do Dynamic Partition Pruning the partition column should be the same as the joining column. Eg: 'Item_Identifier' .
+ 
+So we need to create another partition folder by the joining column name 'Item_Identifier' only then it will be able to pass the query dynamically.
+
+a. 
+spark.conf.set("spark.sql.adaptive.enabled", "true")
+spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.enabled","true")
+spark.conf.set("spark.sql.autoBroadcastJoinThreshold", 5 * 1024 * 1024)
+
+b.
+df = spark.read.format("csv")\
+          .option("header", True)\
+          .option("inferSchema", True)\
+          .load("/dev/my_folder/BigMartSales.csv")
+
+df=df.limit(8)
+ 
+
+c.
+df.write.format("parquet")\
+        .mode("append")\
+        .partitionBy("Item_Identifier")\
+        .option("path","/dev/my_folder/dpp_partitionednew")\
+        .save()
+ 
+ d. 
+ df1 = spark.read.format("parquet")\
+          .load("/dev/my_folder/dpp_partitionednew")
+ e.
+ df2 = spark.read.format("parquet")\
+          .load("/dev/my_folder/dpp_nonpartitioned")
+          
+ f. 
+ df_join= df1.join(df2.filter(col("Item_Identifier")=="FDA15"),df1["Item_Identifier"]==df2["Item_Identifier"],"inner")
+ 
+ 
+ Dynamic Partition Pruning uses the df2 filter and passes or broadcasts the query as a filter to df1 .
+ 
+ H.Broadcast Variable
+ ---------------------------------------------------------------------------------------------------------------------------
+Broadcast variables allow the programmer to keep a read-only variable cached on each machine rather than shipping a copy of it with tasks. They can be used, for example, 
+to give every node a copy of a large input dataset in an efficient manner. Spark also attempts to distribute broadcast variables using efficient broadcast algorithms to 
+reduce communication cost.
+
+Broadcast variables are created from a variable v by calling SparkContext.broadcast(T, scala.reflect.ClassTag<T>). The broadcast variable is a wrapper around v, 
+and its value can be accessed by calling the value method. 
+
+After the broadcast variable is created, it should be used instead of the value v in any functions run on the cluster so that v is not shipped to the nodes more than once.
+ In addition, the object v should not be modified after it is broadcast in order to ensure that all nodes get the same value of the broadcast variable 
+ (e.g. if the variable is shipped to a new node later).
+ 
+ 
+ Suppose there is a UDF and we are using a dictionary variable inside it.
+ var={
+         "a": "abc",
+         "b": "xyz"
+     }
+ So instead of sending this variable to the executors one at a time , again and again we broadcast it to all the executors in all the jobs so that it resides in their memory.
+ 
+ -- create a variable 
+ -- broadcast 
+ -- .get()
+
+#Dataframe
+df = spark.createDataFrame([
+    ("1001",),
+    ("1002",),
+    ("1004",)
+] ,["product_id"])
+
+#Lookup dictionary(small)
+product_dict = {
+    "1001": "iphone",
+    "1002": "Samsung",
+    "1003": "Pixel"
+}
+df.show()
+
+# Broadcasting the dictionary variable.
+broad_vr = spark.sparkContext.broadcast(product_dict)
+
+broad_vr.value
+
+def mymap(x):
+  return broad_vr.value.get(x)
+  
+mymap_udf = udf(mymap)
+
+df_with_names = df.withColumn("product_name",mymap_udf("product_id"))
+
+df_with_names.show()
+
+So instead of sending the dictionary variable values one at a time to the executors it is being broadcasted.
+
+
+I.Salting - OOM 
+-----------------------------------------------------------------------------------------------------------------------------------------
+
+user_id | purchase
+------------------------
+A       | 100
+A       | 200
+A       | 300
+B       | 400
+C       | 500
+
+So if we apply a groupBy(or any wide transformations) , it will create one partition for every user_id . For B and C Ids it will be normal sized partitions but for 
+user id A the partition size will be huge.
+
+So while the partition size of user Id A is  1.5GB the executor which will process this partition only has 1GB memory.
+This will lead to driver OOM (Out-of-Memory) error because we do not have enough memory to process this partition.
+
+Salting           --> We will try to add some numbers or other values to break this large-sized partition into smaller chunks.The numbering will be random but I can select the 
+range, eg: 0-1, 0-2, etc. 
+
+
+user_id | purchase  | salt
+-------------------------------
+A       | 100       | 0
+A       | 200       | 1 
+A       | 300       | 0 
+B       | 400       | 0
+C       | 500       | 1
+
+We will add a new column to the above dataframe / table that will be a concat of the 'user_id' and the 'salt' column.
+
+user_id | purchase  | salt  |  NewCol
+--------------------------------------
+A       | 100       | 0     |  A0
+A       | 200       | 1     |  A1
+A       | 300       | 0     |  A0
+B       | 400       | 0     |  B0
+C       | 500       | 1     |  C1
+
+Now instead of the big sized partition of only user_id 'A' we will create partitions based on the NewCol. So we will have partition for 'A0' , one for 'A1' , one for 
+'B0' , etc. So we have now broken down the big partition into smaller chunks.
+
+Creating a Dataframe 
+-------------------------
+
+data = [("A",100),("A",200),("A",300),("B",400),("C",500)]
+df = spark.createDataFrame(data,[user_id,purchase])
+ 
+ df.show()
+ 
+ So imagine there are 10 million records for user_id 'A' and the size of the partition is more than 1GB. 
+ We cannot process this data because we are having driver OOM error.
+ 
+ Adding Salt column
+ ----------------------------
+ df= df.withColumn("salt_column",floor(rand() * 3)) # Salt starts from 0 and it can go upto n number of values. Here n=3.
+ 
+ Creating Concat column on original groupBy column and salt_column to create a new groupBy column
+ -------------------------------------------------------------------------------------------------------
+ df = df.withColumn("user_id_salt",concat(col("user_id"),lit("-"),col("salt_column")))
+ df.show()
+ 
+ Applying groupBy on this new column
+ -------------------------------------------------------------------------------------------------------
+ df = df.groupBy("user_id_salt").agg(sum("purchase"))
+
+df.show()
+
+J.Delta Lake Optimization
+--------------------------------------------------------------------------------------------------------------
+    1) Optimize --> So if we have a large number of small files we will be faced with something called a 'small file problem' . Optimize command will apply coalesce operation on top of 
+    these files and will compress the data of mutiple, small files into smaller number of evenly sized large files. So if we have 200 files/partitions, the data will be compacted into 20 or 
+    less number of optimized files/partitions of even size.
+    
+    2) ZOrdering --> Suppose there are two partitions . Before Zordering, data was | 1,4,3 | in partition 1 and | 2,6,0 | in partition 2.
+       But after Zordering it is sorted as below . 
+       So if we have a query like "Select * from tbl where  cust_id > 4" it will directly go to partition 2 and skip partition 1 because data in the partition 2 fulfills the 
+       predicate condition.It will come to know the min. value and max. value of each partition through a feature called column statistics and it performs data skipping.
+       (In Databricks it is the transaction log)
+    
+            Partition 1
+    |-----------------------------|
+    |        0,1,2,3              |
+    |-----------------------------|
+    
+           Partition 2
+    |-----------------------------|
+    |          4,6                |
+    |-----------------------------|
+    
+    
+    
+ %sql
+CREATE SCHEMA samir_schema;
+
+%sql
+CREATE TABLE samir_schema.samirtbl
+(
+id INT,
+salary INT
+)
+USING DELTA ;
+
+%sql
+INSERT INTO samir_schema.samirtbl
+VALUES
+-- (1,100),
+-- (2,100),
+(3,100),
+(4,100),
+(5,100),
+(6,100);
+
+
+%sql
+OPTIMIZE samir_schema.samirtbl ZORDER BY (id)
+
+
+
+ 
+ 
+
+
+
+ 
+ 
+ 
+
+
+
+
+    
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

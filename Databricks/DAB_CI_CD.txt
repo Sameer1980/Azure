@@ -1,0 +1,283 @@
+Databricks Asset Bundles are a tool to facilitate the adoption of software engineering best practices, including source control, code review, testing and continuous integration and delivery(CI/CD), for your data and AI projects.
+Bundles provide a way to include metadata alongside your project's source files and make it possible to describe Databricks resources such as jobs and pipelines as source files.
+Ultimately a bundle is an end-to-end definition of a project, including how the project should be structured, tested and deployed. This makes it easier to collaborate on projects during 
+active development.
+  
+Databricks CLI - Backbone of Asset Bundles.
+
+Install Databricks CLI using Windows Winget.
+
+Prerequisites - A) VS Code 
+B) Python
+C) Install UV  <Home>> pip install UV 
+UV is an extremely fast Python package and project manager written in Rust by Astral.
+
+Install Databricks CLI using Winget. 
+A)From CMD -> 'winget search databricks'
+B) From CMD -> 'winget install Databricks.DatabricksCLI'
+C) Check the Databricks CLI version .
+From CMD -> databricks -v
+
+Create a folder named 'ASSETBUNDLETUT' and open it with VS-code.
+Open a new terminal in VS-Code .
+Test whether it is working fine or not . Close VS-Code and reopen.
+C:\Users\samir\OneDrive\Desktop\databricks\ASSETBUNDLETUT> databricks -v
+(Try to put the above in a virtual environment.)
+
+In order to work with and authenticate our Databricks Workspace from CLI we will be using 'Authentication' - There are 2 types of Authentication - U2M (User to Machine) 
+and M2M (Machine to Machine). We will be going with the U2M.
+
+U2M Authentication steps:
+
+A) Go to Databricks UI -> SQL Warehouses -> Connection details -> copy the Server hostname and paste below along with 'https://'
+
+B) C:\Users\samir\OneDrive\Desktop\databricks\ASSETBUNDLETUT> databricks auth login  https://dbc-3a3fe619-5d0f.cloud.databricks.com
+
+C) Enter and give the profile name as DEV.
+Authetication from CLI to Databricks completed.
+Profile is saved in a .cfg config file. 
+
+D) C:\Users\samir\OneDrive\Desktop\databricks\ASSETBUNDLETUT> databricks --profiles list 
+Help ? command -> databricks -h 
+C:\Users\samir\OneDrive\Desktop\databricks\ASSETBUNDLETUT> databricks auth profiles 
+
+You can check '.databrickscfg' file from VS-code . Open 'C:\Users\samir\'
+
+We can check all the Databricks catalogs with the 'help' command ->  1) databricks catalogs -h 
+To get a list of all valid catalogs - databricks catalogs list 
+'databricks catalogs create assetbundles --profile DEV'. We will not be able to create it because we are using a Databricks free edition and we don't have control over Metastore.
+
+So instead create catalog from Databricks UI . Catalog name-> 'assetbundles' .
+
+Create a Schema within catalog .
+Check from CLI . 'databricks catalogs get assetbundles --profile DEV' 
+
+Create a schema from CLI . 'databricks schemas create bronze assetbundles --profile DEV'  . (REST API calls from CLI to the Databricks workspace API helped to create the schema)
+
+Databricks Asset Bundle , a tool for CI/CD devops.
+---------------------------------------------------------------
+A) Within Databricks CLI initialize -> 
+C:\Users\samir\OneDrive\Desktop\databricks\ASSETBUNDLETUT> 'databricks bundle init'
+Name the bundle as 'dabtutorial'. Hit enter for all subsequent actions . (Eg: 'Include an ETL pipeline' , 'Use serverless compute' , 'Use personal schema for each user working 
+on this project', etc.... 
+
+Open the 'dabtutorial' folder created within the 'ASSETBUNDLETUT' folder to check files and other artifacts.
+This will identify your folder as a Bundled project folder.
+
+B) From Databricks UI, create a folder called 'PROD' under Workspace.
+Within the Databricks Asset Bundles folder 'dabtutorial' --> 'src' --> create another folder 'notebooks' --> create a Python file or notebook 'notebook1.ipynb'.
+
+> print("Hello World")
+
+Use 'databricks bundle -h' (To get help on all the commands)
+
+To reauthenticate in case you get error : C:\Users\samir\OneDrive\Desktop\databricks\ASSETBUNDLETUT> 'databricks auth login --profile DEV'
+
+
+C) Deploy notebook in DEV:
+--------------------------
+
+'databricks bundle deploy --target dev' 
+
+Once deployed check from : .bundle --> dabtutorial --> dev -> files . We will see everything here.
+
+
+D) Deploy Job in DEV:
+-------------------------------
+
+i)Create a job from the Databricks UI.
+ii) Add a notebook. Give the task name as 'ingestion'. 
+iii)Map the notebook 'notebooks' and create the task.
+iv) Name the job as 'demojob'.
+v) Click on the three dots (:) and select 'Edit as YAML'. Copy the .yaml file contents --> go to 'databricks.yml' in VSCode and paste the contents just below the 'bundle' node.
+   So whenever we will deploy the bundle we need to deploy the resources as well which includes the job.
+vi) So instead of placing all our deployments in the 'databricks.yml' file which contains other things like 'artifacts', 'variables' , targets' ,etc. we can create a separate folder/file.
+   Under the 'resources' folder, create another folder named 'jobs' and within that a .yml file 'demojob.yml' .
+vii) Remove the .yml contents from the 'databricks.yml' file. Under the 'include:' node --> under 'resources/*.yml' add 'resources/*/*.yml' . This will include all file/folders within
+      the 'resources' folder.
+viii) We need to deploy the job in multiple environments which may not have the email Id 'smrbanerjee43@gmail.com' .We need to provide the relative path instead of the full path.
+ix) Instead of this '/Workspace/Users/smrbanerjee43@gmail.com/.bundle/dabtutorial/dev/files/src/notebooks/notebooks' , give this 
+              '../../src/notebooks/notebooks' . This will help to provide path for deployment to all environments , DEV, TEST or PROD.
+X) Now deploy the bundle one more time . 'databricks bundle deploy --target dev' . Add the file extension '.ipynb' to the 'notebooks' file, 'notebooks.ipynb' -> save and then run
+           'databricks bundle deploy --target dev' . It will deploy the bundle.
+Xi) Check for the deployed job under the '/Workspace/Users/smrbanerjee43@gmail.com/.bundle/dabtutorial/dev/files/resources/jobs' where we will see a 'demojob.yml' file deployed.
+XII) In the 'databricks.yml' add a node 'presets:
+                                              name_prefix: dev_${workspace.current_user.short_name}
+                                              source_linked_deployment: false '
+
+This databricks.yml configuration snippet defines custom deployment presets for a Databricks Asset Bundle (DAB) target, customizing how resources are named and deployed.
+         name_prefix: 'dev_${workspace.current_user.short_name}':
+                   --Automatically prepends a custom string to the names of all deployed resources (like jobs or pipelines).
+                   --Uses the current user's short username (e.g., dev_john.doe) to prevent naming conflicts when multiple developers deploy the same bundle to a shared workspace.
+
+
+  'source_linked_deployment: false':
+         --Disables source-linked deployments, meaning the deployed resources use copied workspace files rather than directly pointing to active source files in your workspace folder                          during workspace-based deployments. Meaning you do not need to use the source linked path. You always need to deploy using this path , '../../src/notebooks/notebooks.ipynb' .
+
+Delete the '.databricks' folder. Then again run the below command. 
+Deploy the bundle again. C:\Users\samir\OneDrive\Desktop\databricks\ASSETBUNDLETUT\dabtutorial> 'databricks bundle deploy --target dev'.
+
+Q) What is the importance of this '.databricks' folder and how asset bundles track changes within this particular .bundle folder?
+A) This '.databricks' folder is basically the transaction log , the version control system. The '.json' file under the 'ASSETBUNDLE->dabtutorial-> .databricks-> sync_snapshots' folder 
+    is the snapshot of the last deployment.
+   So if we want to deploy another notebook under 'src' folder( 'ASSETBUNDLE->dabtutorial-> src -> notebooks') named 'notebooks2.ipynb' , it will check the above '.json' file before 
+   deploying it to the target. With the help of the above '.json' file it will do incremental deployment.
+  For any fresh deployments with new notebooks and pipelines delete the '.databricks' folder and run C:\Users\samir\OneDrive\Desktop\databricks\ASSETBUNDLETUT\dabtutorial> 'databricks bundle deploy --target dev'. It will do a full deployment of all the things.
+
+
+Deploy to PROD.
+------------------------------
+
+1)So first of all we need to set the permissions. 
+From 'databricks.yml' under the 'prod:' node , 'permissions' sub-node , instead of 'user_name' key we can give 'group_name' key and 
+set the value as 'admins'. We can create the group by using Databricks settings --> Identity and access' --> 'Groups' --> 'Manage'. We will see three group - 'admins', 'users'. 
+Change the root path, add 'PROD' -> root_path:  /Workspace/Users/smrbanerjee43@gmail.com/PROD/.bundle/${bundle.name}/${bundle.target} 
+
+2) Remove the 'demojobs' job from 'Jobs & Pipelines' . ** Before deploying to crititcal environments , always validate and deploy some checks.
+   -- 'databricks bundle summary --target prod'
+   -- 'databricks bundle validate -- target prod'
+
+3) Now deploy the bundle to PROD. 'databricks bundle deploy --target prod'. Snapshots of the deployment will be different for DEV and PROD.
+
+Deployment using Git folder.
+--------------------------------------------
+
+1)We need to attach our local repo with the GitHub repo. Create a remote Git repo, 'Databricks_deployment_test'. 
+2) Go to the Databricks UI --> settings --> 'Linked accounts' --> 'Add Git Credential'--> choose 'Link Git account'--> 'Link'.
+3) Delete the '.bundle' and the 'demojobs' job and create a Git folder. Copy the remote repo path from Git. Eg: 'https://github.com/Sameer1980/Databricks_deployment_test.git'
+    and paste in the Databricks Git folder. Click 'Create Folder'.
+
+4) Go inside Git folder 'Databricks_deployment_test' and click on 'main' . We need to create a feature branch. Click 'Create Branch' . If we see error click on the first link 
+   to authenticate with GitHub and inside GitHub select one or all repos.
+
+5) Now start with development. Create a demo notebook "demo". In order to run any terminal we need a cluster. Click on 'Serverless' -> 'Web Terminal' or click on the terminal icon
+   down below right hand side.
+6) 'databricks bundle init' . Hit enter for all subsequent actions. Give the name of the project (eg: 'dabtutorial') , default catalog (eg:'assetbundles'), Initial language
+     (eg: 'python'). We don't need the configuration (.cfg) file because it is taken care of by the Databricks UI.
+7) From the 'databricks.yml' file, under the 'targets':
+                                                   'dev':    node , under 'workspace': 
+                                                                             'host': https://dbc-3a3fe619-5d0f.cloud.databricks.com/
+
+This to be copied from 'Compute' -> 'SQL Warehouses' -> 'Serverless Starter Warehouse' -> 'Server hostname' . 
+
+8) Within 'src' folder create another folder 'notebooks'. Create a notebook 'ingestion' .
+9) Create a parameterized query.
+        - dbutils.widgets.text("catalog_name","")
+        - catalog_name = dbutils.widgets.get("catalog_name")
+        - spark.sql(f"SELECT * FROM {catalog_name}.information_schema.columns").show()
+
+10) Create a job from 'Jobs and Pipelines' and create a task named 'ingestion' .Map the 'ingestion' notebook path to this task.
+11) Create a parameter . Key --> 'catalog_name' , value --> 'assetbundles' but this value will be changed by using the Databricks Asset Bundles. 
+    Create the task. Save the job as 'ingestion_job' .
+
+12) Creating the environment variable.
+---------------------------------------------------------------------------
+Open the yaml editor and copy the yaml value('/Workspace/Users/smrbanerjee43@gmail.com/.bundle/dabtutorial/dev/files/resources/jobs/demojob.yml') --> go to the resources folder and create another folder 'jobs'.Under the 'jobs' folder create a .yml file 'jobs.yml'.Copy the contents into this file --> change the 'notebook_path' to relative path , '../../src/notebooks/ingestion.ipynb' . 
+
+13) Create a 'variables.yml'.
+    variables:
+        catalog_name:
+           default: assetbundles
+
+14) Modify the 'jobs.yml' file . For the 'catalog_name' keyname give '${var.catalog_name}' as value.
+    'catalog_name: ${var.catalog_name}'
+
+                       
+
+15) Include a basic level DLT pipeline into our Asset Bundles. Go to 'Jobs & Pipelines' and create a new pipeline 'demopipeline' . Create a new pipeline file 'transformation.py' .
+      import dlt
+
+     @dlt.table
+     def transformed():
+           return spark.range(10)
+
+16) Change the root folder path to '/Workspace/Users/smrbanerjee43@gmail.com/.bundle/dabtutorial/dev/files/src/pipelines/demopipeline'.
+17) Go to 'Jobs & Pipelines' , select 'demopipeline' --> click the 3 dots to select 'View settings YAML' and copy the contents of the file.
+18) Now go to the 'databricks.yml' file. '/Workspace/Users/smrbanerjee43@gmail.com/.bundle/dabtutorial/dev/files/databricks.yml' .
+19) Under the 'resources' folder create a folder called 'pipeline'. Under that folder create a file named 'demopipeline.yml' . Copy the contents of the 'demopipeline' .yml file 
+    into this. 
+    
+                 --In the 'root_path' key change the path to relative path . 'root_path: ../../src/pipelines/demopipeline' .
+
+                 --Do the same with 'transformations' as well . 'include: ../../src/pipelines/demopipeline/transformations/**'
+
+                 -- Change the catalog name to -> 'catalog: ${var.catalog_name}' 
+
+20) Go to 'databricks.yml' file. 
+    -- Under 'presets' ('targets:' --> 'dev:' --> 'presets:')if it doesn't exist .
+                            presets:
+                                name_prefix: dev_${workspace.current_user.short_name}
+                                source_linked_deployment: false
+
+     --Under 'prod:' set the root_path as :
+              -   'root_path: /Workspace/Users/smrbanerjee43@gmail.com/PROD/.bundle/${bundle.name}/${bundle.target}' 
+
+     -- Under 'prod:' --> 'permissions:' --> change to 'group_name: admins' 
+
+21) Go to any Databricks CLI : (Validation and summary)
+        -- From any notebook run 'databricks bundle validate --target dev'. 
+                Eg: '/Workspace/Users/smrbanerjee43@gmail.com/.bundle/dabtutorial/dev/files/src/pipelines/demopipeline/transformations$ databricks bundle validate --target dev'
+
+       View the summary:
+            'databricks bundle summary --target dev'
+
+22) From the Databricks CLI deploy the bundle: 
+                    'databricks bundle deploy --target dev'
+
+23) Deploy to PROD with overriding environment variables.
+             -- 'databricks bundle deploy --target prod --var="catalog_name=assetbundles_prod" 
+
+
+24) If faced with error go to catalog to create a new catalog for PROD.'assetbundles_prod' .
+
+
+Destroy Bundle.
+--------------------------------------------
+'databricks bundle destroy --target prod' 
+
+Push to Git
+----------------------------------------
+
+Go to the 'Databricks_deployment_test' git folder. Change to the feature branch 'feature_samir'.Clicking 'Commit & Push' will commit all our changes to the remote Git repo.
+From GitHub select the feature branch 'feature_samir' and create a pull request 'Compare & pull request' . Click 'Create pull request' .
+Then merge with 'main' branch. 
+
+
+
+
+
+
+      
+
+
+
+
+
+
+       
+
+
+
+ 
+
+
+
+
+
+
+
+ 
+
+
+
+
+                            
+
+
+
+
+
+
+
+
+
